@@ -1,37 +1,34 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]  
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
+> This template is filled in by `/speckit.plan` and is tailored to the Synology DS920+ Pterodactyl SPK.
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+[Primary requirement + intended technical approach from research.md in two sentences]
 
-## Technical Context
+## Technical Context (Fill, do not delete fields)
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+- **Target DSM/Arch**: `DSM 7.2 / geminilake (x86_64)` unless feature dictates otherwise  
+- **Build Toolchain**: `spksrc` via `scripts/package/*.sh` (note if Docker-in-Docker or bare-metal)  
+- **Runtime Stack**: PHP 8.3 panel, Go Wings daemon, Docker Compose stack (panel, MariaDB, Redis)  
+- **External Dependencies**: `Docker`, `php83` SPK, Synology SSL, `synopkg` APIs, [NEEDS CLARIFICATION if new]  
+- **Storage Layout Impacted**: `/var/packages/pterodactyl/target`, `/var/packages/pterodactyl/var`, `/volume1/@appdata/pterodactyl`  
+- **Testing Surface**: `spk/scripts/verify-perms.sh`, docker-compose smoke tests, `synopkg install --test` notes  
+- **Performance / Resource Goals**: <2 GB RAM idle, <70% CPU on DS920+, I/O limited to NAS data share  
+- **Constraints**: No network egress inside SPK, secrets locked to `panel.env` (600), wings limited to docker group
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+Replace any line with `NEEDS CLARIFICATION` if the spec fails to answer it.
 
-## Constitution Check
+## Constitution Check (All MUST be addressed before Phase 0)
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
-
-[Gates determined based on constitution file]
+- **Synology Build Integrity**: Describe how this work keeps `make package` reproducible (toolchain, scripts touched, artifact expectations).  
+- **Pterodactyl Fidelity**: Confirm upstream tags/branches being targeted, migration/rollback story, and whether configs remain compatible with `panel.env` & `wings.config`.  
+- **Security & Isolation**: Call out permission changes (service user, docker group, ACLs), TLS implications, and any new secrets or env vars.  
+- **Resource & Observability**: Quantify load impact (CPU/RAM, storage), log/metrics touchpoints, and backup/restore hooks that need updates.  
+- **Support & Upgrade Path**: Map the DSM builds, php83/Docker version assumptions, and how upgrades/uninstalls will be rehearsed (`service_pre*` hooks, docs).
 
 ## Project Structure
 
@@ -47,52 +44,20 @@ specs/[###-feature]/
 └── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
-### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
+### Repository Topology (update with the dirs this feature touches)
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+scripts/package/         # bootstrap, build-php-runtime, build-wings, build-spk
+cross/                   # cross tool defs (panel, wings, ...)
+spk/pterodactyl/         # SPK metadata, service scripts, docker assets
+spk/scripts/             # verification utilities (permissions, smoke)
+dist/ & .build/          # generated artifacts (never commit)
+docs/, specs/, .specify/ # process + operator guidance
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+Extend/adjust the tree to show new files or subdirectories you intend to add.
+
+**Structure Decision**: [Summarize which directories/files will change and why]
 
 ## Complexity Tracking
 

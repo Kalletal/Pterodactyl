@@ -1,0 +1,94 @@
+name: Build & Test SPK
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'spk/**'
+      - 'docs/**'
+      - 'specs/**'
+      - 'Makefile'
+      - '.github/workflows/package.yml'
+      - 'build/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SYNO_SDK_IMAGE: synologytoolkit/dsm7.2:7.2-64570
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Composer
+        run: |
+          EXPECTED_CHECKSUM="$(curl -fsSL https://composer.github.io/installer.sig)"
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+          if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+            echo 'ERROR: Invalid composer installer checksum' >&2
+            exit 1
+          fi
+          php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          rm composer-setup.php
+
+      - name: Build SPK
+        run: |
+          make setup || true
+          make package
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spk-dist
+          path: |
+            dist/**/*.spk
+            dist/**/*.json
+            dist/**/*.sha256
+            build/logs/**
+
+  verify-perms:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare staging
+        run: |
+          bash scripts/package/build-php-runtime.sh || true
+          bash scripts/package/build-runtime-tools.sh || true
+          bash scripts/package/build-wings.sh || true
+          bash scripts/package/build-spk.sh || true
+
+      - name: Create verification tree
+        run: |
+          ROOT="$PWD/.verify"
+          install -d "$ROOT/var/packages/pterodactyl/target/var"
+          install -d "$ROOT/volume1/@appdata/pterodactyl"
+          touch "$ROOT/var/packages/pterodactyl/target/var/.env"
+          chmod 600 "$ROOT/var/packages/pterodactyl/target/var/.env"
+          USERNAME="$(id -un)"
+          GROUPNAME="$(id -gn)"
+          export VERIFY_ROOT="$ROOT"
+          export VERIFY_USER="$USERNAME"
+          export VERIFY_GROUP="$GROUPNAME"
+          spk/scripts/verify-perms.sh

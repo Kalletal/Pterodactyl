@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" -ne 1 ]; then
+  echo "Usage: sponge <file>" >&2
+  exit 64
+fi
+TMP="$(mktemp)"
+trap 'rm -f "$TMP"' EXIT
+cat > "$TMP"
+cat "$TMP" > "$1"

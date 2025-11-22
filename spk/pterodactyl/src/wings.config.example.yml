@@ -1,0 +1,42 @@
+# Copy this file to /var/packages/pterodactyl/var/data/wings/config.yml
+# and adjust the secrets before starting the service in production.
+system:
+  data: /var/packages/pterodactyl/var/data/wings
+  archives: /var/packages/pterodactyl/var/data/backups
+  username: sc-pterodactyl
+  timezone: Europe/Paris
+
+api:
+  host: 0.0.0.0
+  port: 8081
+  ssl:
+    enabled: false
+    cert: /var/packages/pterodactyl/var/data/certs/fullchain.pem
+    key: /var/packages/pterodactyl/var/data/certs/privkey.pem
+
+allowed_mounts:
+  - /var/packages/pterodactyl/var/data
+  - /volume1
+
+panel:
+  url: https://nas.local:8080
+  token_id: PTRO-DACTYL-TOKEN
+  token: CHANGEME_TOKEN
+  cert: ""
+
+docker:
+  network:
+    interface: eth0
+    name: pterodactyl0
+  socket: /var/run/docker.sock
+  timezone_path: /etc/localtime
+  root_directory: /var/lib/docker/volumes
+
+remote:
+  url: https://nas.local:8080
+  tunnel: false
+
+sftp:
+  bind_port: 2022
+  read_timeout: 15
+  write_timeout: 15

@@ -1,0 +1,26 @@
+[
+  {
+    "step_title": "Prérequis système",
+    "items": [
+      {
+        "desc": "Votre NAS doit exécuter <strong>Docker</strong> (compose) et le paquet <strong>php83</strong> avec les extensions CLI suivantes&nbsp;: openssl, gd, mysql, PDO, mbstring, tokenizer, bcmath, xml, curl, zip. Gardez également <code>curl</code>, <code>tar</code>, <code>unzip</code>, <code>git</code> et <code>composer v2</code> disponibles pour les tâches d'administration."
+      }
+    ]
+  },
+  {
+    "step_title": "Base de données et cache",
+    "items": [
+      {
+        "desc": "Le paquet fournit des conteneurs <strong>MariaDB 10.11</strong> (≥10.2 requis) et <strong>Redis 7.2</strong> par défaut. Vous pouvez pointer vers des instances externes en ajustant <code>panel.env</code>. Le panneau officiel tourne via <strong>Apache</strong>; utilisez le reverse proxy DSM pour TLS."
+      }
+    ]
+  },
+  {
+    "step_title": "Secrets",
+    "items": [
+      {
+        "desc": "Après installation, éditez <code>/var/packages/pterodactyl/var/panel.env</code> pour définir APP_KEY, identifiants MariaDB/Redis, tokens Wings et l'URL publique. Générez un nouvel <code>APP_KEY</code> avant exposition."
+      }
+    ]
+  }
+]

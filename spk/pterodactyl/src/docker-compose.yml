@@ -1,0 +1,97 @@
+version: "3.9"
+
+# Panel image ships Apache + PHP; expose HTTP internally and terminate TLS via DSM reverse proxy.
+services:
+  panel:
+    image: ${PANEL_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      - panel-db
+      - panel-redis
+    ports:
+      - "${PANEL_HTTP_PORT:-8080}:${PANEL_SOURCE_PORT:-8080}"
+    environment:
+      APP_ENV: ${APP_ENV}
+      APP_URL: ${APP_URL}
+      APP_TIMEZONE: ${APP_TIMEZONE}
+      APP_SERVICE: ${APP_SERVICE}
+      APP_KEY: ${APP_KEY}
+      APP_LOCALE: ${APP_LOCALE}
+      APP_FALLBACK_LOCALE: ${APP_FALLBACK_LOCALE}
+      CACHE_DRIVER: ${CACHE_DRIVER}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION}
+      SESSION_DRIVER: ${SESSION_DRIVER}
+      SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      LOG_CHANNEL: ${LOG_CHANNEL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      MAIL_DRIVER: ${MAIL_DRIVER}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+    volumes:
+      - ${DATA_ROOT}/panel:/app/storage
+      - ${DATA_ROOT}/certs:/etc/letsencrypt
+    networks:
+      - pterodactyl
+
+  panel-db:
+    image: ${MARIADB_IMAGE}
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ${DATA_ROOT}/database:/var/lib/mysql
+      - ${PACKAGE_TARGET}/share/bootstrap.sql:/docker-entrypoint-initdb.d/bootstrap.sql:ro
+    networks:
+      - pterodactyl
+
+  panel-redis:
+    image: ${REDIS_IMAGE}
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - ${DATA_ROOT}/redis:/data
+    networks:
+      - pterodactyl
+
+  wings:
+    image: ${WINGS_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      - panel
+    ports:
+      - "${WINGS_DAEMON_PORT:-8081}:${WINGS_SOURCE_PORT:-8080}"
+    environment:
+      TZ: ${APP_TIMEZONE}
+      WINGS_FQDN: ${WINGS_FQDN}
+      WINGS_TOKEN: ${WINGS_TOKEN}
+      WINGS_PANEL_URL: ${WINGS_PANEL_URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+      - ${WINGS_CONFIG_PATH}:/etc/pterodactyl/config.yml
+      - ${DATA_ROOT}/wings:/var/lib/pterodactyl
+    networks:
+      - pterodactyl
+
+networks:
+  pterodactyl:
+    driver: bridge
