@@ -1,15 +1,20 @@
 #!/bin/sh
 
-PACKAGE="pterodactyl"
-DNAME="Pterodactyl"
+# Pterodactyl Panel - DSM Start/Stop/Status Script
+# Docker containers are managed by DSM Docker Worker (conf/resource)
+# This script only manages the Wings daemon (native binary)
+
+PACKAGE="ptero"
+DNAME="Ptero"
 INSTALL_DIR="/var/packages/${PACKAGE}/target"
 VAR_DIR="/var/packages/${PACKAGE}/var"
-COMPOSE_DIR="${INSTALL_DIR}/share/docker"
-COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
-ENV_FILE="${VAR_DIR}/panel.env"
 LOG_FILE="${VAR_DIR}/${PACKAGE}.log"
-PID_FILE="${VAR_DIR}/${PACKAGE}.pid"
-PROJECT_NAME="pterodactyl"
+
+# Wings daemon paths
+WINGS_BIN="${INSTALL_DIR}/bin/wings"
+WINGS_CONFIG="${VAR_DIR}/data/wings/config.yml"
+WINGS_PID_FILE="${VAR_DIR}/wings.pid"
+WINGS_LOG="${VAR_DIR}/wings.log"
 
 PATH="${INSTALL_DIR}/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -17,112 +22,71 @@ log() {
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" >> "${LOG_FILE}" 2>/dev/null
 }
 
-ensure_env()
+start_wings()
 {
-    if [ ! -f "${ENV_FILE}" ]; then
-        echo "${DNAME}: missing ${ENV_FILE}, aborting" >&2
-        exit 1
-    fi
-    # shellcheck disable=SC2046
-    set -a
-    . "${ENV_FILE}"
-    set +a
-    if [ -n "${COMPOSE_PROJECT}" ]; then
-        PROJECT_NAME="${COMPOSE_PROJECT}"
-    fi
-}
-
-compose_cmd()
-{
-    if docker compose version >/dev/null 2>&1; then
-        docker compose --project-name "${PROJECT_NAME}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
-    elif command -v docker-compose >/dev/null 2>&1; then
-        docker-compose --project-name "${PROJECT_NAME}" -f "${COMPOSE_FILE}" "$@"
-    else
-        echo "${DNAME}: docker compose plugin missing" >&2
-        exit 1
-    fi
-}
-
-ensure_docker()
-{
-    if ! docker info >/dev/null 2>&1; then
-        echo "${DNAME}: Docker daemon is not available. Please start the Docker package." >&2
-        exit 1
-    fi
-}
-
-start_daemon()
-{
-    ensure_env
-    ensure_docker
-    compose_cmd pull panel wings panel-db panel-redis >/dev/null 2>&1 || true
-    compose_cmd up -d --remove-orphans
-    echo $$ > "${PID_FILE}"
-    log "stack started"
-}
-
-stop_daemon()
-{
-    ensure_env
-    compose_cmd down
-    rm -f "${PID_FILE}"
-    log "stack stopped"
-}
-
-active_containers()
-{
-    docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" --filter "status=running" -q
-}
-
-daemon_status()
-{
-    ensure_env
-    if [ -n "$(active_containers)" ]; then
+    if [ ! -x "${WINGS_BIN}" ]; then
+        log "Wings binary not found at ${WINGS_BIN}"
         return 0
     fi
-    rm -f "${PID_FILE}"
-    return 1
+    if [ ! -f "${WINGS_CONFIG}" ]; then
+        log "Wings config not found at ${WINGS_CONFIG}, skipping Wings startup"
+        echo "${DNAME}: Wings not configured. Configure via Panel after first login." >&2
+        return 0
+    fi
+    if [ -f "${WINGS_PID_FILE}" ] && kill -0 "$(cat "${WINGS_PID_FILE}")" 2>/dev/null; then
+        log "Wings already running"
+        return 0
+    fi
+    # Start Wings daemon in background
+    "${WINGS_BIN}" --config "${WINGS_CONFIG}" >> "${WINGS_LOG}" 2>&1 &
+    echo $! > "${WINGS_PID_FILE}"
+    log "Wings daemon started (PID: $!)"
 }
 
-wait_for_status()
+stop_wings()
 {
-    goal=$1
-    timeout=$2
-    while [ ${timeout} -gt 0 ]; do
-        daemon_status
-        [ $? -eq ${goal} ] && return 0
-        timeout=$((timeout-1))
-        sleep 1
-    done
-    return 1
+    if [ -f "${WINGS_PID_FILE}" ]; then
+        PID=$(cat "${WINGS_PID_FILE}")
+        if kill -0 "${PID}" 2>/dev/null; then
+            kill "${PID}" 2>/dev/null
+            sleep 2
+            # Force kill if still running
+            if kill -0 "${PID}" 2>/dev/null; then
+                kill -9 "${PID}" 2>/dev/null
+            fi
+            log "Wings daemon stopped"
+        fi
+        rm -f "${WINGS_PID_FILE}"
+    fi
+}
+
+wings_running()
+{
+    [ -f "${WINGS_PID_FILE}" ] && kill -0 "$(cat "${WINGS_PID_FILE}")" 2>/dev/null
 }
 
 case "$1" in
     start)
-        if daemon_status; then
-            echo "${DNAME} already running"
-            exit 0
-        fi
         echo "Starting ${DNAME}"
-        start_daemon
+        log "Starting ${DNAME} (Docker containers managed by DSM)"
+        # Docker containers are started by DSM Docker Worker
+        # Only start Wings if configured
+        start_wings
+        exit 0
         ;;
     stop)
-        if daemon_status; then
-            echo "Stopping ${DNAME}"
-            stop_daemon
-        else
-            echo "${DNAME} is not running"
-        fi
+        echo "Stopping ${DNAME}"
+        log "Stopping ${DNAME}"
+        # Stop Wings daemon
+        stop_wings
+        # Docker containers are stopped by DSM Docker Worker
+        exit 0
         ;;
     status)
-        if daemon_status; then
-            echo "${DNAME} is running"
-            exit 0
-        else
-            echo "${DNAME} is not running"
-            exit 1
-        fi
+        # For DSM, we report running if the package is active
+        # Docker containers status is managed by DSM
+        echo "${DNAME} is running"
+        exit 0
         ;;
     restart)
         $0 stop

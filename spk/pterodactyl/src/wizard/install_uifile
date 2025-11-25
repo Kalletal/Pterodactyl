@@ -1,25 +1,89 @@
 [
   {
-    "step_title": "Prérequis système",
+    "step_title": "Configuration du Panel",
     "items": [
       {
-        "desc": "Votre NAS doit exécuter <strong>Docker</strong> (compose) et le paquet <strong>php83</strong> avec les extensions CLI suivantes&nbsp;: openssl, gd, mysql, PDO, mbstring, tokenizer, bcmath, xml, curl, zip. Gardez également <code>curl</code>, <code>tar</code>, <code>unzip</code>, <code>git</code> et <code>composer v2</code> disponibles pour les tâches d'administration."
+        "type": "textfield",
+        "desc": "Port HTTP pour accéder au Panel Pterodactyl",
+        "subitems": [
+          {
+            "key": "wizard_http_port",
+            "desc": "Port HTTP",
+            "defaultValue": "38080",
+            "validator": {
+              "allowBlank": false,
+              "regex": {
+                "expr": "/^[0-9]+$/",
+                "errorText": "Le port doit être un nombre"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "textfield",
+        "desc": "URL publique du Panel (ex: https://pterodactyl.monnas.local)",
+        "subitems": [
+          {
+            "key": "wizard_app_url",
+            "desc": "URL du Panel",
+            "defaultValue": "http://localhost:38080",
+            "validator": {
+              "allowBlank": false
+            }
+          }
+        ]
       }
     ]
   },
   {
-    "step_title": "Base de données et cache",
+    "step_title": "Configuration Base de données",
     "items": [
       {
-        "desc": "Le paquet fournit des conteneurs <strong>MariaDB 10.11</strong> (≥10.2 requis) et <strong>Redis 7.2</strong> par défaut. Vous pouvez pointer vers des instances externes en ajustant <code>panel.env</code>. Le panneau officiel tourne via <strong>Apache</strong>; utilisez le reverse proxy DSM pour TLS."
+        "type": "password",
+        "desc": "Mot de passe pour l'utilisateur pterodactyl de MariaDB",
+        "subitems": [
+          {
+            "key": "wizard_db_password",
+            "desc": "Mot de passe DB",
+            "defaultValue": "",
+            "validator": {
+              "allowBlank": false,
+              "minLength": 8,
+              "regex": {
+                "expr": "/^[^'\"\\\\]+$/",
+                "errorText": "Évitez les caractères spéciaux: ' \" \\"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "desc": "Mot de passe root pour MariaDB",
+        "subitems": [
+          {
+            "key": "wizard_db_root_password",
+            "desc": "Mot de passe root DB",
+            "defaultValue": "",
+            "validator": {
+              "allowBlank": false,
+              "minLength": 8,
+              "regex": {
+                "expr": "/^[^'\"\\\\]+$/",
+                "errorText": "Évitez les caractères spéciaux: ' \" \\"
+              }
+            }
+          }
+        ]
       }
     ]
   },
   {
-    "step_title": "Secrets",
+    "step_title": "Informations importantes",
     "items": [
       {
-        "desc": "Après installation, éditez <code>/var/packages/pterodactyl/var/panel.env</code> pour définir APP_KEY, identifiants MariaDB/Redis, tokens Wings et l'URL publique. Générez un nouvel <code>APP_KEY</code> avant exposition."
+        "desc": "<b>Prérequis:</b><ul><li><b>Container Manager</b> (Docker) sera installé automatiquement</li><li><b>PHP 8.3</b> requis pour les tâches d'administration</li></ul><br><b>Services créés:</b><ul><li>MariaDB 10.5 (base de données)</li><li>Redis Alpine (cache)</li><li>Pterodactyl Panel (interface web)</li></ul><br><b>Note:</b> Wings (daemon) doit être configuré séparément après l'installation du Panel."
       }
     ]
   }

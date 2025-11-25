@@ -55,3 +55,90 @@
 - Update spec/plan tasks to include verification of php83 extensions (`php83 -m`), composer v2 version check, Apache documentation.
 - Ensure wizard copy mentions Apache + php83 + Docker prerequisites explicitly.
 - Verify docker-compose logs + `spk/scripts/verify-perms.sh` as acceptance criteria in tasks phase.
+
+---
+
+## Research Update – 2025-11-25
+
+### DSM 7 Docker Access for SPK Packages
+
+**Problem identified**: SPK packages in DSM 7 cannot access Docker directly because:
+1. Packages run as non-root user (`sc-<package>` or `<package>`)
+2. The package user is not in the `docker` group
+3. `sudo` is not available without terminal interaction
+4. `run-as: root` is blocked for community packages in DSM 7.2
+
+**Solution found**: Use the **Synology Docker Worker** instead of manual docker-compose execution.
+
+### Synology Docker Worker
+
+Reference: [Synology Developer Guide - Docker Package](https://help.synology.com/developer-guide/examples/compile_docker_package.html)
+
+The Docker Worker is a DSM feature that:
+- Automatically manages Docker containers for SPK packages
+- Generates `docker-compose.yaml` from the `conf/resource` file
+- Handles container lifecycle (create/start/stop/remove) during package install/uninstall
+- Runs with appropriate privileges - **DSM handles Docker access, not the package**
+
+#### Resource File Structure for Docker Worker
+
+```json
+{
+  "docker": {
+    "services": [
+      {
+        "service": "service-name",
+        "image": "image-name",
+        "container_name": "ContainerName",
+        "tag": "version",
+        "restart": "unless-stopped",
+        "shares": [
+          {"host_dir": "relative/path", "mount_point": "/container/path"}
+        ],
+        "ports": [
+          {"host_port": "{{wizard_variable}}", "container_port": "80", "protocol": "tcp"}
+        ],
+        "environment": [
+          {"key": "ENV_VAR", "value": "{{wizard_value}}"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Key Benefits
+- No need for the SSS script to call `docker compose` directly
+- DSM manages permissions automatically
+- Wizard variables can be injected via `{{wizard_variable}}` syntax
+- Container lifecycle tied to package lifecycle
+
+#### Limitations
+- Less flexibility than raw docker-compose
+- Environment variables must follow specific format
+- Network configuration is limited
+- Cannot use docker-compose advanced features (depends_on conditions, healthchecks, etc.)
+
+### Wings Daemon Considerations
+
+Wings cannot run inside Docker (it needs to manage Docker containers itself). Options:
+1. Run Wings as native binary with limited functionality (no direct Docker access for game servers)
+2. Document manual Wings installation separately
+3. Use a wrapper that grants Docker access to Wings binary
+
+**Current approach**: Include Wings binary but note that it requires manual Docker group configuration for full functionality.
+
+### Package Dependencies
+
+Add to Makefile:
+```makefile
+INSTALL_DEP_PACKAGES = ContainerManager
+```
+
+This ensures Container Manager (Docker) is installed before the package.
+
+### Sources
+
+- [Synology Developer Guide - Docker Package](https://help.synology.com/developer-guide/examples/compile_docker_package.html)
+- [SynoCommunity spksrc - DSM 7 Support](https://github.com/SynoCommunity/spksrc/issues/4215)
+- [SynoForum - Docker Worker Discussion](https://www.synoforum.com/threads/new-docker-worker-for-package-docker-integration.6090/)

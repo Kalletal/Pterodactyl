@@ -1,5 +1,62 @@
 {
   "port-config": {
-    "protocol-file": "app/pterodactyl.sc"
+    "protocol-file": "app/ptero.sc"
+  },
+  "docker": {
+    "services": [
+      {
+        "service": "panel-db",
+        "image": "mariadb",
+        "container_name": "ptero-db",
+        "tag": "10.5",
+        "restart": "unless-stopped",
+        "shares": [
+          {"host_dir": "database", "mount_point": "/var/lib/mysql"}
+        ],
+        "environment": [
+          {"key": "MYSQL_ROOT_PASSWORD", "value": "{{wizard_db_root_password}}"},
+          {"key": "MYSQL_DATABASE", "value": "pterodactyl"},
+          {"key": "MYSQL_USER", "value": "pterodactyl"},
+          {"key": "MYSQL_PASSWORD", "value": "{{wizard_db_password}}"}
+        ]
+      },
+      {
+        "service": "panel-redis",
+        "image": "redis",
+        "container_name": "ptero-redis",
+        "tag": "alpine",
+        "restart": "unless-stopped",
+        "shares": [
+          {"host_dir": "redis", "mount_point": "/data"}
+        ]
+      },
+      {
+        "service": "panel",
+        "image": "ghcr.io/pterodactyl/panel",
+        "container_name": "ptero-panel",
+        "tag": "latest",
+        "restart": "unless-stopped",
+        "ports": [
+          {"host_port": "{{wizard_http_port}}", "container_port": "80", "protocol": "tcp"}
+        ],
+        "shares": [
+          {"host_dir": "panel/storage", "mount_point": "/app/storage"}
+        ],
+        "environment": [
+          {"key": "APP_ENV", "value": "production"},
+          {"key": "APP_URL", "value": "{{wizard_app_url}}"},
+          {"key": "APP_TIMEZONE", "value": "Europe/Paris"},
+          {"key": "DB_HOST", "value": "ptero-db"},
+          {"key": "DB_PORT", "value": "3306"},
+          {"key": "DB_DATABASE", "value": "pterodactyl"},
+          {"key": "DB_USERNAME", "value": "pterodactyl"},
+          {"key": "DB_PASSWORD", "value": "{{wizard_db_password}}"},
+          {"key": "REDIS_HOST", "value": "ptero-redis"},
+          {"key": "CACHE_DRIVER", "value": "redis"},
+          {"key": "SESSION_DRIVER", "value": "redis"},
+          {"key": "QUEUE_CONNECTION", "value": "redis"}
+        ]
+      }
+    ]
   }
 }

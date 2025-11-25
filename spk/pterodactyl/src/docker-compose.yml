@@ -72,25 +72,10 @@ services:
     networks:
       - pterodactyl
 
-  wings:
-    image: ${WINGS_IMAGE}
-    restart: unless-stopped
-    depends_on:
-      - panel
-    ports:
-      - "${WINGS_DAEMON_PORT:-8081}:${WINGS_SOURCE_PORT:-8080}"
-    environment:
-      TZ: ${APP_TIMEZONE}
-      WINGS_FQDN: ${WINGS_FQDN}
-      WINGS_TOKEN: ${WINGS_TOKEN}
-      WINGS_PANEL_URL: ${WINGS_PANEL_URL}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/volumes:/var/lib/docker/volumes
-      - ${WINGS_CONFIG_PATH}:/etc/pterodactyl/config.yml
-      - ${DATA_ROOT}/wings:/var/lib/pterodactyl
-    networks:
-      - pterodactyl
+  # NOTE: Wings daemon runs as a native binary on the host, not in Docker.
+  # Install Wings separately using the binary from:
+  # https://github.com/pterodactyl/wings/releases
+  # Wings needs direct access to Docker to manage game server containers.
 
 networks:
   pterodactyl:

@@ -1,14 +1,19 @@
 PANEL_SHARE="${SYNOPKG_PKGDEST}/share/panel"
-DOCKER_DIR="${SYNOPKG_PKGDEST}/share/docker"
-COMPOSE_FILE="${DOCKER_DIR}/docker-compose.yml"
-ENV_EXAMPLE="${SYNOPKG_PKGDEST}/share/panel.env.example"
 WINGS_CONFIG_EXAMPLE="${SYNOPKG_PKGDEST}/share/wings.config.example.yml"
-SQL_BOOTSTRAP="${SYNOPKG_PKGDEST}/share/bootstrap.sql"
 VAR_DIR="${SYNOPKG_PKGVAR}"
 DATA_DIR="${VAR_DIR}/data"
 LOG_DIR="${VAR_DIR}/logs"
-ENV_FILE="${VAR_DIR}/panel.env"
 WINGS_CONFIG="${DATA_DIR}/wings/config.yml"
+
+# Docker containers are managed by DSM Docker Worker (conf/resource)
+# No need to check Docker here - INSTALL_DEP_PACKAGES ensures Container Manager is installed
+
+service_preinst()
+{
+    # Docker/Container Manager is automatically installed via INSTALL_DEP_PACKAGES
+    # No additional prerequisites check needed
+    return 0
+}
 
 create_data_dirs()
 {
@@ -93,8 +98,24 @@ service_postupgrade()
 service_postuninst()
 {
     if [ "${SYNOPKG_PKG_STATUS}" = "UNINSTALL" ]; then
+        # Remove user from docker group
         if getent group docker >/dev/null 2>&1; then
             delgroup "${EFF_USER}" docker || true
         fi
+
+        # Clean up all package directories (using SYNOPKG_PKGNAME for flexibility)
+        rm -rf "/volume1/@appconf/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+        rm -rf "/volume1/@appdata/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+        rm -rf "/volume1/@apphome/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+        rm -rf "/volume1/@appshare/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+        rm -rf "/volume1/@apptemp/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+        rm -rf "/volume1/@tmp/synopkg/lfs/image/INST/${SYNOPKG_PKGNAME}" 2>/dev/null || true
+
+        # Clean up logs
+        rm -f "/var/log/packages/${SYNOPKG_PKGNAME}.log" 2>/dev/null || true
+        rm -f /var/log/systemd/*${SYNOPKG_PKGNAME}* 2>/dev/null || true
+
+        # Stop and remove Docker containers
+        docker rm -f ptero-panel ptero-db ptero-redis 2>/dev/null || true
     fi
 }
