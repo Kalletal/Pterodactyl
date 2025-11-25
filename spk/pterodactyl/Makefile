@@ -1,6 +1,6 @@
 SPK_NAME = ptero
 SPK_VERS = 1.11.6
-SPK_REV = 1
+SPK_REV = 2
 SPK_ICON = src/pterodactyl.png
 DSM_UI_DIR = app
 

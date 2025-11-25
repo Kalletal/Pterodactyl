@@ -1,17 +1,45 @@
 PANEL_SHARE="${SYNOPKG_PKGDEST}/share/panel"
 WINGS_CONFIG_EXAMPLE="${SYNOPKG_PKGDEST}/share/wings.config.example.yml"
+ENV_EXAMPLE="${SYNOPKG_PKGDEST}/share/panel.env.example"
 VAR_DIR="${SYNOPKG_PKGVAR}"
 DATA_DIR="${VAR_DIR}/data"
 LOG_DIR="${VAR_DIR}/logs"
+ENV_FILE="${VAR_DIR}/panel.env"
 WINGS_CONFIG="${DATA_DIR}/wings/config.yml"
 
-# Docker containers are managed by DSM Docker Worker (conf/resource)
-# No need to check Docker here - INSTALL_DEP_PACKAGES ensures Container Manager is installed
+# Cleanup function - called on uninstall or failed install
+cleanup_package()
+{
+    # Stop and remove Docker containers
+    docker rm -f ptero-panel ptero-db ptero-redis 2>/dev/null || true
+
+    # Remove user from docker group
+    if getent group docker >/dev/null 2>&1 && [ -n "${EFF_USER}" ]; then
+        delgroup "${EFF_USER}" docker 2>/dev/null || true
+    fi
+
+    # Clean up all package directories
+    local pkg="${SYNOPKG_PKGNAME:-ptero}"
+    rm -rf "/volume1/@appconf/${pkg}" 2>/dev/null || true
+    rm -rf "/volume1/@appdata/${pkg}" 2>/dev/null || true
+    rm -rf "/volume1/@apphome/${pkg}" 2>/dev/null || true
+    rm -rf "/volume1/@appshare/${pkg}" 2>/dev/null || true
+    rm -rf "/volume1/@apptemp/${pkg}" 2>/dev/null || true
+    rm -rf "/volume1/@tmp/synopkg/lfs/image/INST/${pkg}" 2>/dev/null || true
+    rm -f "/run/synopkg/lock/${pkg}.lock" 2>/dev/null || true
+
+    # Clean up system files
+    rm -rf "/usr/syno/etc/packages/${pkg}" 2>/dev/null || true
+    rm -rf "/usr/syno/synoman/webman/3rdparty/${pkg}" 2>/dev/null || true
+    rm -f "/usr/local/etc/services.d/${pkg}.sc" 2>/dev/null || true
+
+    # Clean up logs
+    rm -f "/var/log/packages/${pkg}.log" 2>/dev/null || true
+    rm -f /var/log/systemd/*${pkg}* 2>/dev/null || true
+}
 
 service_preinst()
 {
-    # Docker/Container Manager is automatically installed via INSTALL_DEP_PACKAGES
-    # No additional prerequisites check needed
     return 0
 }
 
@@ -40,7 +68,7 @@ generate_app_key()
 
 hydrate_env_file()
 {
-    if [ ! -f "${ENV_FILE}" ]; then
+    if [ ! -f "${ENV_FILE}" ] && [ -f "${ENV_EXAMPLE}" ]; then
         install -m 0600 "${ENV_EXAMPLE}" "${ENV_FILE}"
         APP_KEY=$(generate_app_key)
         sed -i "s#APP_KEY=.*#APP_KEY=base64:${APP_KEY}#" "${ENV_FILE}"
@@ -49,7 +77,7 @@ hydrate_env_file()
 
 hydrate_wings_config()
 {
-    if [ ! -f "${WINGS_CONFIG}" ]; then
+    if [ ! -f "${WINGS_CONFIG}" ] && [ -f "${WINGS_CONFIG_EXAMPLE}" ]; then
         install -d -m 0770 "${DATA_DIR}/wings"
         install -m 0640 "${WINGS_CONFIG_EXAMPLE}" "${WINGS_CONFIG}"
     fi
@@ -61,23 +89,26 @@ service_postinst()
     hydrate_env_file
     hydrate_wings_config
     install -d -m 0750 "${VAR_DIR}/runtime"
-    touch "${VAR_DIR}/pterodactyl.log"
-    chmod 0640 "${VAR_DIR}/pterodactyl.log"
+    touch "${VAR_DIR}/ptero.log"
+    chmod 0640 "${VAR_DIR}/ptero.log"
 
-    chown -R "${EFF_USER}:${EFF_USER}" "${VAR_DIR}"
+    if [ -n "${EFF_USER}" ]; then
+        chown -R "${EFF_USER}:${EFF_USER}" "${VAR_DIR}" 2>/dev/null || true
+    fi
 
-    if getent group docker >/dev/null 2>&1; then
-        addgroup "${EFF_USER}" docker || true
+    if getent group docker >/dev/null 2>&1 && [ -n "${EFF_USER}" ]; then
+        addgroup "${EFF_USER}" docker 2>/dev/null || true
     fi
 }
 
 service_preupgrade()
 {
-    install -d -m 0700 "${SYNOPKG_TEMP_UPGRADE_FOLDER}"
-    cp -a "${ENV_FILE}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/panel.env" 2>/dev/null || true
-    cp -a "${WINGS_CONFIG}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/wings.config.yml" 2>/dev/null || true
-    if [ -d "${DATA_DIR}" ]; then
-        rsync -a "${DATA_DIR}/" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/data/"
+    if [ -d "${SYNOPKG_TEMP_UPGRADE_FOLDER}" ]; then
+        cp -a "${ENV_FILE}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/panel.env" 2>/dev/null || true
+        cp -a "${WINGS_CONFIG}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/wings.config.yml" 2>/dev/null || true
+        if [ -d "${DATA_DIR}" ]; then
+            rsync -a "${DATA_DIR}/" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/data/" 2>/dev/null || true
+        fi
     fi
 }
 
@@ -90,32 +121,21 @@ service_postupgrade()
         install -m 0640 "${SYNOPKG_TEMP_UPGRADE_FOLDER}/wings.config.yml" "${WINGS_CONFIG}"
     fi
     if [ -d "${SYNOPKG_TEMP_UPGRADE_FOLDER}/data" ]; then
-        rsync -a "${SYNOPKG_TEMP_UPGRADE_FOLDER}/data/" "${DATA_DIR}/"
+        rsync -a "${SYNOPKG_TEMP_UPGRADE_FOLDER}/data/" "${DATA_DIR}/" 2>/dev/null || true
     fi
-    chown -R "${EFF_USER}:${EFF_USER}" "${VAR_DIR}"
+    if [ -n "${EFF_USER}" ]; then
+        chown -R "${EFF_USER}:${EFF_USER}" "${VAR_DIR}" 2>/dev/null || true
+    fi
+}
+
+service_preuninst()
+{
+    # Stop containers before uninstall
+    docker stop ptero-panel ptero-db ptero-redis 2>/dev/null || true
 }
 
 service_postuninst()
 {
-    if [ "${SYNOPKG_PKG_STATUS}" = "UNINSTALL" ]; then
-        # Remove user from docker group
-        if getent group docker >/dev/null 2>&1; then
-            delgroup "${EFF_USER}" docker || true
-        fi
-
-        # Clean up all package directories (using SYNOPKG_PKGNAME for flexibility)
-        rm -rf "/volume1/@appconf/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-        rm -rf "/volume1/@appdata/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-        rm -rf "/volume1/@apphome/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-        rm -rf "/volume1/@appshare/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-        rm -rf "/volume1/@apptemp/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-        rm -rf "/volume1/@tmp/synopkg/lfs/image/INST/${SYNOPKG_PKGNAME}" 2>/dev/null || true
-
-        # Clean up logs
-        rm -f "/var/log/packages/${SYNOPKG_PKGNAME}.log" 2>/dev/null || true
-        rm -f /var/log/systemd/*${SYNOPKG_PKGNAME}* 2>/dev/null || true
-
-        # Stop and remove Docker containers
-        docker rm -f ptero-panel ptero-db ptero-redis 2>/dev/null || true
-    fi
+    # Always cleanup on uninstall
+    cleanup_package
 }
