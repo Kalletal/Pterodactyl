@@ -1,6 +1,6 @@
-SPK_NAME = ptero
+SPK_NAME = pteropanel
 SPK_VERS = 1.11.6
-SPK_REV = 2
+SPK_REV = 3
 SPK_ICON = src/pterodactyl.png
 DSM_UI_DIR = app
 
@@ -20,7 +20,7 @@ SERVICE_SETUP = src/service-setup.sh
 SSS_SCRIPT = src/dsm-control.sh
 # Port is configured dynamically via wizard - no static SERVICE_PORT to avoid conflicts
 # User chooses port during installation, Docker Worker binds to it
-FWPORTS = src/app/ptero.sc
+FWPORTS = src/app/pteropanel.sc
 
 WIZARDS_DIR = src/wizard
 CONF_DIR = src/conf

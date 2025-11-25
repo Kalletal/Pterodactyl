@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "com.synocommunity.packages.pteropanel": {
+      "title": "PteroPanel",
+      "desc": "Pterodactyl Panel Web Interface",
+      "icon": "images/pteropanel-{0}.png",
+      "type": "url",
+      "protocol": "http",
+      "port": "{{wizard_http_port}}",
+      "url": "/"
+    }
+  }
+}

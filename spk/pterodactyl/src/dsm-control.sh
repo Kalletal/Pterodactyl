@@ -4,8 +4,8 @@
 # Docker containers are managed by DSM Docker Worker (conf/resource)
 # This script only manages the Wings daemon (native binary)
 
-PACKAGE="ptero"
-DNAME="Ptero"
+PACKAGE="pteropanel"
+DNAME="PteroPanel"
 INSTALL_DIR="/var/packages/${PACKAGE}/target"
 VAR_DIR="/var/packages/${PACKAGE}/var"
 LOG_FILE="${VAR_DIR}/${PACKAGE}.log"

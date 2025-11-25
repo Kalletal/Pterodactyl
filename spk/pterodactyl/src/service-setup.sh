@@ -11,7 +11,7 @@ WINGS_CONFIG="${DATA_DIR}/wings/config.yml"
 cleanup_package()
 {
     # Stop and remove Docker containers
-    docker rm -f ptero-panel ptero-db ptero-redis 2>/dev/null || true
+    docker rm -f pteropanel-panel pteropanel-db pteropanel-redis 2>/dev/null || true
 
     # Remove user from docker group
     if getent group docker >/dev/null 2>&1 && [ -n "${EFF_USER}" ]; then
@@ -19,7 +19,7 @@ cleanup_package()
     fi
 
     # Clean up all package directories
-    local pkg="${SYNOPKG_PKGNAME:-ptero}"
+    local pkg="${SYNOPKG_PKGNAME:-pteropanel}"
     rm -rf "/volume1/@appconf/${pkg}" 2>/dev/null || true
     rm -rf "/volume1/@appdata/${pkg}" 2>/dev/null || true
     rm -rf "/volume1/@apphome/${pkg}" 2>/dev/null || true
@@ -131,7 +131,7 @@ service_postupgrade()
 service_preuninst()
 {
     # Stop containers before uninstall
-    docker stop ptero-panel ptero-db ptero-redis 2>/dev/null || true
+    docker stop pteropanel-panel pteropanel-db pteropanel-redis 2>/dev/null || true
 }
 
 service_postuninst()
