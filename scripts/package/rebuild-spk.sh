@@ -60,13 +60,9 @@ declare -a WIZARD_MAPPINGS=(
     "wizard/uninstall_uifile:WIZARD_UIFILES/uninstall_uifile"
 )
 
-# Répertoire des traductions (copie récursive)
-LANG_SRC_DIR="lang/fr"
-LANG_DEST_DIR="share/lang/fr"
-
 # Métadonnées du package (description et changelog)
 DESCRIPTION="Pterodactyl Panel pour Synology avec Wings daemon intégré. Configuration Wings: 1) Connectez-vous au Panel 2) Admin → Nodes → Create New 3) Copiez la configuration YAML 4) Dans le Menu DSM, cliquez sur Configurer Wings et collez la configuration."
-CHANGELOG="Ajout traduction française avec choix de langue. Nouvelles icônes officielles Pterodactyl. Interface de configuration Wings intégrée."
+CHANGELOG="Nouvelles icônes officielles Pterodactyl. Interface de configuration Wings intégrée."
 
 # Trouver le SPK le plus récent
 find_latest_spk() {
@@ -156,18 +152,6 @@ main() {
             fi
         fi
     done
-
-    # Copier les fichiers de traduction (répertoire complet)
-    log_info "Mise à jour des fichiers de traduction..."
-    if [[ -d "${SRC_DIR}/${LANG_SRC_DIR}" ]]; then
-        local lang_dest="${TMP_DIR}/package/${LANG_DEST_DIR}"
-        mkdir -p "$lang_dest"
-        if ! diff -rq "${SRC_DIR}/${LANG_SRC_DIR}" "$lang_dest" >/dev/null 2>&1; then
-            cp -r "${SRC_DIR}/${LANG_SRC_DIR}/"* "$lang_dest/"
-            log_info "  Mis à jour : ${LANG_SRC_DIR}"
-            files_updated=$((files_updated + 1))
-        fi
-    fi
 
     # Recréer package.tgz
     log_info "Reconstruction de package.tgz..."

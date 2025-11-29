@@ -54,7 +54,6 @@ services:
       - ${DATA_ROOT}/panel/nginx:/etc/nginx/http.d
       - ${DATA_ROOT}/certs:/etc/letsencrypt
       - ${DATA_ROOT}/panel/logs:/app/storage/logs
-      - ${DATA_ROOT}/lang/fr:/app/resources/lang/fr:ro
     networks:
       - pterodactyl
 

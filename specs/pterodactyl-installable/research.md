@@ -964,3 +964,129 @@ Cette approche :
 - Ne nécessite pas de serveur HTTP supplémentaire
 - S'intègre nativement dans DSM
 - Sépare clairement les deux fonctionnalités
+
+---
+
+## Research Update – 2025-11-29 (Traduction / Internationalisation)
+
+### Limitations de Traduction de Pterodactyl Panel 1.x
+
+**Découverte importante** : Pterodactyl Panel 1.x **ne supporte pas** la traduction de l'interface utilisateur via les fichiers de langue PHP standard.
+
+### Architecture du Frontend
+
+| Version | Frontend | Système i18n | Traduction possible |
+|---------|----------|--------------|---------------------|
+| Pterodactyl 0.x | Blade/PHP | Fichiers `/resources/lang/` | ✅ Oui |
+| Pterodactyl 1.x | **React** | **Texte hardcodé** | ❌ Non |
+
+Le frontend de Pterodactyl 1.x est construit avec **React** et tout le texte est **codé en dur en anglais** dans les fichiers JavaScript/TypeScript. Il n'y a **pas de système d'internationalisation (i18n)** intégré.
+
+### Ce que font les fichiers `/resources/lang/`
+
+Les fichiers PHP de traduction (comme ceux de [Snipeur060/Pterodactyl-French-Traduction](https://github.com/Snipeur060/Pterodactyl-French-Traduction)) traduisent **uniquement** :
+
+| Élément | Traduit | Exemple |
+|---------|---------|---------|
+| Messages d'erreur backend | ✅ | "Ces identifiants ne correspondent pas à nos enregistrements." |
+| Validations de formulaires | ✅ | "Le champ email est obligatoire." |
+| Emails système | ✅ | "Réinitialisation de mot de passe" |
+| **Interface utilisateur** | ❌ | Boutons, menus, titres, textes |
+| **Dashboard React** | ❌ | Toute l'interface web |
+
+### Variable `APP_LOCALE`
+
+La variable `APP_LOCALE` dans `.env` :
+- **Affecte** : Messages Laravel backend, format de date/heure
+- **N'affecte PAS** : L'interface utilisateur React
+
+Définir `APP_LOCALE=fr` ne traduit pas l'interface en français.
+
+### Sources et Issues GitHub
+
+- [Issue #2341 - Language changes do not apply](https://github.com/pterodactyl/panel/issues/2341)
+  > "This would not work because the new 1.0 frontend has no i18n implemented. The whole text is hardcoded."
+
+- [Discussion #2898 - Cannot change default language](https://github.com/pterodactyl/panel/discussions/2898)
+  > "There were several translations in 0.0.x versions, but now there's only en."
+
+- [Issue #4495 - Language translation](https://github.com/pterodactyl/panel/issues/4495)
+  > "Currently the panel is completely in English and it is quite difficult to translate it."
+
+### Solutions Possibles
+
+#### Option 1 : Pelican Panel (Fork avec i18n)
+
+[Pelican Panel](https://pelican.dev/) est un fork actif de Pterodactyl qui a implémenté le support de traduction :
+
+| Fonctionnalité | Pterodactyl | Pelican |
+|----------------|-------------|---------|
+| Traduction frontend | ❌ | ✅ (Crowdin) |
+| Maintenance active | ⚠️ Sécurité uniquement | ✅ Active |
+| Migration depuis Pterodactyl | - | ✅ Compatible |
+
+**Sources** :
+- [Pelican Blog - Crowdin Translation](https://pelican.dev/blog/)
+- [Pelican vs Pterodactyl Comparison](https://pelican.dev/docs/comparison/)
+
+#### Option 2 : Image Docker Personnalisée
+
+Pour traduire Pterodactyl 1.x, il faudrait :
+
+1. Modifier les fichiers source React dans `/resources/scripts/`
+2. Recompiler le frontend avec `yarn build:production`
+3. Créer une image Docker personnalisée
+
+**Inconvénients** :
+- Perte des mises à jour officielles
+- Maintenance manuelle requise
+- Complexité élevée
+
+#### Option 3 : Addon Payant (Non recommandé)
+
+[Pterodactyl Market - Translation System](https://pterodactylmarket.com/resource/309) (~$6.99)
+- N'est plus maintenu ("may no longer be updated")
+- Pas de remboursement
+- Compatibilité incertaine avec les thèmes
+
+### Décision pour le Package SPK
+
+Étant donné ces limitations :
+
+1. **Retirer le sélecteur de langue** du wizard d'installation (inutile)
+2. **Conserver les fichiers PHP de traduction** (utiles pour les erreurs backend)
+3. **Documenter la limitation** dans le wizard et la description du package
+4. **Proposer Pelican** comme alternative pour les utilisateurs francophones
+
+### Fichiers de Traduction Conservés
+
+Les fichiers PHP de traduction restent utiles pour :
+- Messages d'erreur de connexion
+- Validations de formulaire
+- Emails automatiques
+- Messages de la console artisan
+
+Structure conservée dans le package :
+```
+share/lang/fr/
+├── activity.php
+├── auth.php
+├── exceptions.php
+├── pagination.php
+├── passwords.php
+├── strings.php
+├── validation.php
+├── admin/
+├── command/
+├── dashboard/
+└── server/
+```
+
+### Recommandation Finale
+
+Pour une expérience entièrement en français :
+- **Court terme** : Accepter l'interface en anglais, les erreurs seront en français
+- **Moyen terme** : Surveiller le développement de Pelican Panel
+- **Long terme** : Migrer vers Pelican quand la traduction sera complète
+
+---

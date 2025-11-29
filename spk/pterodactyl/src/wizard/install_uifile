@@ -3,23 +3,7 @@
     "step_title": "Configuration du Panel",
     "items": [
       {
-        "type": "combobox",
-        "desc": "Langue de l'interface du Panel",
-        "subitems": [
-          {
-            "key": "wizard_app_locale",
-            "desc": "Langue",
-            "defaultValue": "fr",
-            "editable": false,
-            "data": [
-              ["fr", "Français"],
-              ["en", "English"]
-            ]
-          }
-        ]
-      },
-      {
-        "desc": "<br><b>Important:</b> Entrez l'adresse IP de votre NAS ou un nom de domaine pointant vers celui-ci.<br><i>Ne laissez pas 'localhost' sauf si vous accédez uniquement depuis ce NAS.</i>"
+        "desc": "<b>Important:</b> Entrez l'adresse IP de votre NAS ou un nom de domaine pointant vers celui-ci.<br><i>Ne laissez pas 'localhost' sauf si vous accédez uniquement depuis ce NAS.</i>"
       },
       {
         "type": "textfield",

@@ -1,13 +1,11 @@
 PANEL_SHARE="${SYNOPKG_PKGDEST}/share/panel"
 WINGS_CONFIG_EXAMPLE="${SYNOPKG_PKGDEST}/share/wings.config.example.yml"
 ENV_EXAMPLE="${SYNOPKG_PKGDEST}/share/panel.env.example"
-LANG_DIR_SRC="${SYNOPKG_PKGDEST}/share/lang"
 VAR_DIR="${SYNOPKG_PKGVAR}"
 DATA_DIR="${VAR_DIR}/data"
 LOG_DIR="${VAR_DIR}/logs"
 ENV_FILE="${VAR_DIR}/panel.env"
 WINGS_CONFIG="${DATA_DIR}/wings/config.yml"
-LANG_DIR="${DATA_DIR}/lang"
 
 # Cleanup function - called on uninstall or failed install
 cleanup_package()
@@ -43,18 +41,8 @@ create_data_dirs()
     # Database and cache
     mkdir -p "${DATA_DIR}/database" 2>/dev/null || true
     mkdir -p "${DATA_DIR}/redis" 2>/dev/null || true
-    # Language files directory
-    mkdir -p "${LANG_DIR}/fr" 2>/dev/null || true
     # Package logs
     install -d -m 0750 "${LOG_DIR}" 2>/dev/null || mkdir -p "${LOG_DIR}"
-}
-
-copy_lang_files()
-{
-    # Copy French translation files if they exist
-    if [ -d "${LANG_DIR_SRC}/fr" ]; then
-        cp -r "${LANG_DIR_SRC}/fr/"* "${LANG_DIR}/fr/" 2>/dev/null || true
-    fi
 }
 
 generate_app_key()
@@ -95,10 +83,6 @@ hydrate_env_file()
         sed -i "s#APP_SETUP_ADMIN_EMAIL=.*#APP_SETUP_ADMIN_EMAIL=${admin_email}#" "${ENV_FILE}"
         sed -i "s#APP_SETUP_ADMIN_USERNAME=.*#APP_SETUP_ADMIN_USERNAME=${admin_username}#" "${ENV_FILE}"
         sed -i "s#APP_SETUP_ADMIN_PASSWORD=.*#APP_SETUP_ADMIN_PASSWORD=${admin_password}#" "${ENV_FILE}"
-
-        # Language configuration
-        local app_locale="${wizard_app_locale:-fr}"
-        sed -i "s#APP_LOCALE=.*#APP_LOCALE=${app_locale}#" "${ENV_FILE}"
     fi
 }
 
@@ -114,7 +98,6 @@ hydrate_wings_config()
 service_postinst()
 {
     create_data_dirs
-    copy_lang_files
     hydrate_env_file
     hydrate_wings_config
     install -d -m 0750 "${VAR_DIR}/runtime"
@@ -126,7 +109,6 @@ service_postinst()
         chown "${EFF_USER}:${EFF_USER}" "${VAR_DIR}" "${LOG_DIR}" "${VAR_DIR}/runtime" 2>/dev/null || true
         chown "${EFF_USER}:${EFF_USER}" "${ENV_FILE}" "${VAR_DIR}/ptero.log" 2>/dev/null || true
         chown "${EFF_USER}:${EFF_USER}" "${WINGS_CONFIG}" 2>/dev/null || true
-        chown -R "${EFF_USER}:${EFF_USER}" "${LANG_DIR}" 2>/dev/null || true
     fi
 
     if getent group docker >/dev/null 2>&1 && [ -n "${EFF_USER}" ]; then
