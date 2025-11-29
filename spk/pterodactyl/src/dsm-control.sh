@@ -1,14 +1,16 @@
 #!/bin/sh
 
 # Pterodactyl Panel - DSM Start/Stop/Status Script
-# Docker containers are managed by DSM Docker Worker (conf/resource)
-# This script only manages the Wings daemon (native binary)
 
-PACKAGE="pteropanel"
-DNAME="PteroPanel"
+PACKAGE="pterodactyl_panel"
+DNAME="Pterodactyl Panel"
 INSTALL_DIR="/var/packages/${PACKAGE}/target"
 VAR_DIR="/var/packages/${PACKAGE}/var"
 LOG_FILE="${VAR_DIR}/${PACKAGE}.log"
+
+# Docker compose paths
+COMPOSE_FILE="${INSTALL_DIR}/share/docker/docker-compose.yml"
+ENV_FILE="${VAR_DIR}/panel.env"
 
 # Wings daemon paths
 WINGS_BIN="${INSTALL_DIR}/bin/wings"
@@ -16,10 +18,147 @@ WINGS_CONFIG="${VAR_DIR}/data/wings/config.yml"
 WINGS_PID_FILE="${VAR_DIR}/wings.pid"
 WINGS_LOG="${VAR_DIR}/wings.log"
 
+# Loading page
+LOADING_SERVER="${INSTALL_DIR}/bin/loading-server.sh"
+LOADING_HTML="${INSTALL_DIR}/share/loading.html"
+PANEL_PORT="38080"
+
 PATH="${INSTALL_DIR}/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 log() {
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$1" >> "${LOG_FILE}" 2>/dev/null
+}
+
+start_loading_page()
+{
+    if [ -x "${LOADING_SERVER}" ] && [ -f "${LOADING_HTML}" ]; then
+        log "Starting loading page server..."
+        "${LOADING_SERVER}" start "${PANEL_PORT}" "${LOADING_HTML}" >> "${LOG_FILE}" 2>&1
+    fi
+}
+
+stop_loading_page()
+{
+    if [ -x "${LOADING_SERVER}" ]; then
+        "${LOADING_SERVER}" stop >> "${LOG_FILE}" 2>&1
+    fi
+}
+
+ensure_port_free()
+{
+    # Make sure port 38080 is free before starting containers
+    log "Ensuring port ${PANEL_PORT} is free..."
+
+    # Stop loading page if running
+    stop_loading_page
+
+    # Kill any process on the port
+    PID_ON_PORT=$(lsof -t -i:${PANEL_PORT} 2>/dev/null)
+    if [ -n "${PID_ON_PORT}" ]; then
+        log "Killing process ${PID_ON_PORT} on port ${PANEL_PORT}"
+        kill -9 ${PID_ON_PORT} 2>/dev/null
+        sleep 1
+    fi
+
+    # Verify port is free
+    if netstat -tlnp 2>/dev/null | grep -q ":${PANEL_PORT} "; then
+        log "WARNING: Port ${PANEL_PORT} still in use"
+        return 1
+    fi
+
+    log "Port ${PANEL_PORT} is free"
+    return 0
+}
+
+is_first_install()
+{
+    # Check if database directory is empty (first install)
+    [ ! -d "${VAR_DIR}/data/database" ] || [ -z "$(ls -A ${VAR_DIR}/data/database 2>/dev/null)" ]
+}
+
+wait_for_panel()
+{
+    # Wait up to 90 seconds for panel to respond
+    log "Waiting for Panel to be ready..."
+    for i in $(seq 1 30); do
+        if curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PANEL_PORT}" 2>/dev/null | grep -qE "^(200|302|301)"; then
+            log "Panel is ready!"
+            return 0
+        fi
+        sleep 3
+    done
+    log "Panel startup timeout (may still be initializing)"
+    return 1
+}
+
+start_containers()
+{
+    if [ ! -f "${COMPOSE_FILE}" ]; then
+        log "ERROR: docker-compose.yml not found at ${COMPOSE_FILE}"
+        return 1
+    fi
+    if [ ! -f "${ENV_FILE}" ]; then
+        log "ERROR: panel.env not found at ${ENV_FILE}"
+        return 1
+    fi
+
+    # Check if containers are already running
+    if containers_running; then
+        log "Docker containers already running"
+        return 0
+    fi
+
+    FIRST_INSTALL="no"
+    if is_first_install; then
+        FIRST_INSTALL="yes"
+        log "First installation detected - showing loading page"
+        start_loading_page
+    fi
+
+    # Pull images (can take a while on first install)
+    log "Pulling Docker images..."
+    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" -p "${PACKAGE}" pull >> "${LOG_FILE}" 2>&1
+
+    # Ensure port is free before starting containers
+    ensure_port_free
+
+    log "Starting Docker containers..."
+    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" -p "${PACKAGE}" up -d >> "${LOG_FILE}" 2>&1
+
+    # Wait for panel to be ready (especially important on first install for migrations)
+    wait_for_panel
+
+    log "Docker containers started"
+}
+
+stop_containers()
+{
+    log "Stopping Docker containers..."
+
+    # Method 1: Try docker-compose down
+    if [ -f "${COMPOSE_FILE}" ] && [ -f "${ENV_FILE}" ]; then
+        docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" -p "${PACKAGE}" down >> "${LOG_FILE}" 2>&1
+    fi
+
+    # Method 2: Force stop any remaining containers with our name
+    CONTAINERS=$(docker ps -q --filter "name=${PACKAGE}" 2>/dev/null)
+    if [ -n "${CONTAINERS}" ]; then
+        log "Force stopping remaining containers..."
+        docker stop ${CONTAINERS} >> "${LOG_FILE}" 2>&1
+        docker rm -f ${CONTAINERS} >> "${LOG_FILE}" 2>&1
+    fi
+
+    # Verify containers are stopped
+    if containers_running; then
+        log "WARNING: Some containers may still be running"
+    else
+        log "Docker containers stopped"
+    fi
+}
+
+containers_running()
+{
+    docker ps --filter "name=${PACKAGE}" --format '{{.Names}}' 2>/dev/null | grep -q "${PACKAGE}"
 }
 
 start_wings()
@@ -68,25 +207,26 @@ wings_running()
 case "$1" in
     start)
         echo "Starting ${DNAME}"
-        log "Starting ${DNAME} (Docker containers managed by DSM)"
-        # Docker containers are started by DSM Docker Worker
-        # Only start Wings if configured
+        log "Starting ${DNAME}"
+        start_containers
         start_wings
         exit 0
         ;;
     stop)
         echo "Stopping ${DNAME}"
         log "Stopping ${DNAME}"
-        # Stop Wings daemon
         stop_wings
-        # Docker containers are stopped by DSM Docker Worker
+        stop_containers
         exit 0
         ;;
     status)
-        # For DSM, we report running if the package is active
-        # Docker containers status is managed by DSM
-        echo "${DNAME} is running"
-        exit 0
+        if containers_running; then
+            echo "${DNAME} is running"
+            exit 0
+        else
+            echo "${DNAME} is not running"
+            exit 1
+        fi
         ;;
     restart)
         $0 stop

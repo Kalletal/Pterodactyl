@@ -10,32 +10,17 @@ WINGS_CONFIG="${DATA_DIR}/wings/config.yml"
 # Cleanup function - called on uninstall or failed install
 cleanup_package()
 {
-    # Stop and remove Docker containers
-    docker rm -f pteropanel-panel pteropanel-db pteropanel-redis 2>/dev/null || true
+    # Stop and remove Docker containers (try both naming conventions)
+    docker rm -f pterodactyl_panel-panel-1 pterodactyl_panel-panel-db-1 pterodactyl_panel-panel-redis-1 2>/dev/null || true
+    docker rm -f pterodactyl_panel-panel pterodactyl_panel-db pterodactyl_panel-redis 2>/dev/null || true
+
+    # Remove Docker network
+    docker network rm pterodactyl_panel_pterodactyl 2>/dev/null || true
 
     # Remove user from docker group
     if getent group docker >/dev/null 2>&1 && [ -n "${EFF_USER}" ]; then
         delgroup "${EFF_USER}" docker 2>/dev/null || true
     fi
-
-    # Clean up all package directories
-    local pkg="${SYNOPKG_PKGNAME:-pteropanel}"
-    rm -rf "/volume1/@appconf/${pkg}" 2>/dev/null || true
-    rm -rf "/volume1/@appdata/${pkg}" 2>/dev/null || true
-    rm -rf "/volume1/@apphome/${pkg}" 2>/dev/null || true
-    rm -rf "/volume1/@appshare/${pkg}" 2>/dev/null || true
-    rm -rf "/volume1/@apptemp/${pkg}" 2>/dev/null || true
-    rm -rf "/volume1/@tmp/synopkg/lfs/image/INST/${pkg}" 2>/dev/null || true
-    rm -f "/run/synopkg/lock/${pkg}.lock" 2>/dev/null || true
-
-    # Clean up system files
-    rm -rf "/usr/syno/etc/packages/${pkg}" 2>/dev/null || true
-    rm -rf "/usr/syno/synoman/webman/3rdparty/${pkg}" 2>/dev/null || true
-    rm -f "/usr/local/etc/services.d/${pkg}.sc" 2>/dev/null || true
-
-    # Clean up logs
-    rm -f "/var/log/packages/${pkg}.log" 2>/dev/null || true
-    rm -f /var/log/systemd/*${pkg}* 2>/dev/null || true
 }
 
 service_preinst()
@@ -46,13 +31,22 @@ service_preinst()
 create_data_dirs()
 {
     install -d -m 0750 "${VAR_DIR}"
-    install -d -m 0770 "${DATA_DIR}/panel/storage"
-    install -d -m 0770 "${DATA_DIR}/panel/cache"
-    install -d -m 0770 "${DATA_DIR}/wings"
-    install -d -m 0770 "${DATA_DIR}/database"
-    install -d -m 0770 "${DATA_DIR}/redis"
-    install -d -m 0770 "${DATA_DIR}/certs"
-    install -d -m 0750 "${LOG_DIR}"
+    install -d -m 0770 "${DATA_DIR}/panel/var" 2>/dev/null || mkdir -p "${DATA_DIR}/panel/var"
+    # Laravel storage structure (ignore permission errors for existing Docker-owned dirs)
+    mkdir -p "${DATA_DIR}/panel/storage/app/packs" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/clockwork" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/debugbar" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/framework/cache/data" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/framework/sessions" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/framework/views" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/storage/logs" 2>/dev/null || true
+    chmod -R 0777 "${DATA_DIR}/panel/storage" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/panel/logs" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/wings" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/database" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/redis" 2>/dev/null || true
+    mkdir -p "${DATA_DIR}/certs" 2>/dev/null || true
+    install -d -m 0750 "${LOG_DIR}" 2>/dev/null || mkdir -p "${LOG_DIR}"
 }
 
 generate_app_key()
@@ -70,8 +64,29 @@ hydrate_env_file()
 {
     if [ ! -f "${ENV_FILE}" ] && [ -f "${ENV_EXAMPLE}" ]; then
         install -m 0600 "${ENV_EXAMPLE}" "${ENV_FILE}"
+
+        # Generate APP_KEY
         APP_KEY=$(generate_app_key)
         sed -i "s#APP_KEY=.*#APP_KEY=base64:${APP_KEY}#" "${ENV_FILE}"
+
+        # Apply wizard values (port is fixed at 38080)
+        local app_host="${wizard_app_host:-localhost}"
+        local app_url="http://${app_host}:38080"
+        local db_pass="${wizard_db_password:-changeMeNow!}"
+        local db_root_pass="${wizard_db_root_password:-ChangeRootPassword!}"
+
+        sed -i "s#APP_URL=.*#APP_URL=${app_url}#" "${ENV_FILE}"
+        sed -i "s#DB_PASSWORD=.*#DB_PASSWORD=${db_pass}#" "${ENV_FILE}"
+        sed -i "s#DB_ROOT_PASSWORD=.*#DB_ROOT_PASSWORD=${db_root_pass}#" "${ENV_FILE}"
+
+        # Admin account configuration
+        local admin_email="${wizard_admin_email:-admin@example.com}"
+        local admin_username="${wizard_admin_username:-admin}"
+        local admin_password="${wizard_admin_password:-ChangeMe123!}"
+
+        sed -i "s#APP_SETUP_ADMIN_EMAIL=.*#APP_SETUP_ADMIN_EMAIL=${admin_email}#" "${ENV_FILE}"
+        sed -i "s#APP_SETUP_ADMIN_USERNAME=.*#APP_SETUP_ADMIN_USERNAME=${admin_username}#" "${ENV_FILE}"
+        sed -i "s#APP_SETUP_ADMIN_PASSWORD=.*#APP_SETUP_ADMIN_PASSWORD=${admin_password}#" "${ENV_FILE}"
     fi
 }
 
@@ -82,6 +97,7 @@ hydrate_wings_config()
         install -m 0640 "${WINGS_CONFIG_EXAMPLE}" "${WINGS_CONFIG}"
     fi
 }
+
 
 service_postinst()
 {
@@ -131,11 +147,21 @@ service_postupgrade()
 service_preuninst()
 {
     # Stop containers before uninstall
-    docker stop pteropanel-panel pteropanel-db pteropanel-redis 2>/dev/null || true
+    docker stop pterodactyl_panel-panel pterodactyl_panel-db pterodactyl_panel-redis 2>/dev/null || true
 }
 
 service_postuninst()
 {
-    # Always cleanup on uninstall
+    # Always cleanup containers and system files
     cleanup_package
+
+    # Delete data if user chose to
+    if [ "${wizard_delete_data}" = "true" ]; then
+        # Use Docker to remove files owned by container users (uid 999, etc.)
+        # This handles database, redis, and panel files owned by Docker
+        docker run --rm -v "/var/packages/pterodactyl_panel/var/data:/data" alpine sh -c "rm -rf /data/*" 2>/dev/null || true
+        docker run --rm -v "/var/packages/pterodactyl_panel/var:/data" alpine sh -c "rm -rf /data/*" 2>/dev/null || true
+        rm -rf "/var/packages/pterodactyl_panel/var" 2>/dev/null || true
+        rm -rf "/volume1/@appdata/pterodactyl_panel" 2>/dev/null || true
+    fi
 }

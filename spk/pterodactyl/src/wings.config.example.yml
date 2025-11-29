@@ -1,21 +1,21 @@
-# Copy this file to /var/packages/pterodactyl/var/data/wings/config.yml
+# Copy this file to /var/packages/pterodactyl_panel/var/data/wings/config.yml
 # and adjust the secrets before starting the service in production.
 system:
-  data: /var/packages/pterodactyl/var/data/wings
-  archives: /var/packages/pterodactyl/var/data/backups
-  username: sc-pterodactyl
+  data: /var/packages/pterodactyl_panel/var/data/wings
+  archives: /var/packages/pterodactyl_panel/var/data/backups
+  username: sc-pterodactyl_panel
   timezone: Europe/Paris
 
 api:
   host: 0.0.0.0
-  port: 8081
+  port: 8443
   ssl:
     enabled: false
-    cert: /var/packages/pterodactyl/var/data/certs/fullchain.pem
-    key: /var/packages/pterodactyl/var/data/certs/privkey.pem
+    cert: /var/packages/pterodactyl_panel/var/data/certs/fullchain.pem
+    key: /var/packages/pterodactyl_panel/var/data/certs/privkey.pem
 
 allowed_mounts:
-  - /var/packages/pterodactyl/var/data
+  - /var/packages/pterodactyl_panel/var/data
   - /volume1
 
 panel:

@@ -3,18 +3,46 @@
     "step_title": "Configuration du Panel",
     "items": [
       {
+        "desc": "<b>Important:</b> Entrez l'adresse IP de votre NAS ou un nom de domaine pointant vers celui-ci.<br><i>Ne laissez pas 'localhost' sauf si vous accédez uniquement depuis ce NAS.</i>"
+      },
+      {
         "type": "textfield",
-        "desc": "Port HTTP pour accéder au Panel Pterodactyl",
+        "desc": "Adresse IP du NAS ou nom de domaine (ex: 192.168.1.100 ou nas.mondomaine.fr)",
         "subitems": [
           {
-            "key": "wizard_http_port",
-            "desc": "Port HTTP",
-            "defaultValue": "38080",
+            "key": "wizard_app_host",
+            "desc": "Hôte du Panel",
+            "defaultValue": "",
+            "validator": {
+              "allowBlank": false
+            }
+          }
+        ]
+      },
+      {
+        "desc": "<br><b>Port:</b> 38080 (non modifiable, ouvert automatiquement dans le pare-feu DSM)<br><b>URL finale:</b> <code>http://&lt;votre-hôte&gt;:38080</code>"
+      }
+    ]
+  },
+  {
+    "step_title": "Compte Administrateur",
+    "items": [
+      {
+        "desc": "<b>Créez le compte administrateur initial.</b><br>Ces identifiants vous permettront de vous connecter au Panel."
+      },
+      {
+        "type": "textfield",
+        "desc": "Adresse email de l'administrateur",
+        "subitems": [
+          {
+            "key": "wizard_admin_email",
+            "desc": "Email admin",
+            "defaultValue": "admin@example.com",
             "validator": {
               "allowBlank": false,
               "regex": {
-                "expr": "/^[0-9]+$/",
-                "errorText": "Le port doit être un nombre"
+                "expr": "/^[^@]+@[^@]+\\.[^@]+$/",
+                "errorText": "Entrez une adresse email valide"
               }
             }
           }
@@ -22,17 +50,36 @@
       },
       {
         "type": "textfield",
-        "desc": "URL publique du Panel (ex: https://pterodactyl.monnas.local)",
+        "desc": "Nom d'utilisateur pour la connexion",
         "subitems": [
           {
-            "key": "wizard_app_url",
-            "desc": "URL du Panel",
-            "defaultValue": "http://localhost:38080",
+            "key": "wizard_admin_username",
+            "desc": "Nom d'utilisateur",
+            "defaultValue": "admin",
             "validator": {
-              "allowBlank": false
+              "allowBlank": false,
+              "minLength": 3
             }
           }
         ]
+      },
+      {
+        "type": "password",
+        "desc": "Mot de passe administrateur (min. 8 caractères)",
+        "subitems": [
+          {
+            "key": "wizard_admin_password",
+            "desc": "Mot de passe admin",
+            "defaultValue": "",
+            "validator": {
+              "allowBlank": false,
+              "minLength": 8
+            }
+          }
+        ]
+      },
+      {
+        "desc": "<br><i>Notez ces identifiants ! Vous pourrez modifier le mot de passe depuis le Panel après connexion.</i>"
       }
     ]
   },
@@ -83,7 +130,7 @@
     "step_title": "Informations importantes",
     "items": [
       {
-        "desc": "<b>Prérequis:</b><ul><li><b>Container Manager</b> (Docker) sera installé automatiquement</li><li><b>PHP 8.3</b> requis pour les tâches d'administration</li></ul><br><b>Services créés:</b><ul><li>MariaDB 10.5 (base de données)</li><li>Redis Alpine (cache)</li><li>Pterodactyl Panel (interface web)</li></ul><br><b>Note:</b> Wings (daemon) doit être configuré séparément après l'installation du Panel."
+        "desc": "<b>Prérequis:</b><ul><li><b>Container Manager</b> (Docker) sera installé automatiquement</li></ul><br><b>Services créés:</b><ul><li>MariaDB 10.5 (base de données)</li><li>Redis Alpine (cache)</li><li>Pterodactyl Panel (interface web)</li></ul><br><b>Connexion:</b> Utilisez l'email et le mot de passe configurés à l'étape précédente.<br><br><b>Note:</b> Wings (daemon) doit être configuré séparément après l'installation du Panel."
       }
     ]
   }

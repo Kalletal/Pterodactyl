@@ -1,5 +1,5 @@
 {
   "port-config": {
-    "protocol-file": "app/pteropanel.sc"
+    "protocol-file": "app/pterodactyl_panel.sc"
   }
 }

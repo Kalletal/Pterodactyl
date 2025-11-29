@@ -1,9 +1,22 @@
 [
   {
-    "step_title": "Sauvegarde",
+    "step_title": "Options de désinstallation",
     "items": [
       {
-        "desc": "La désinstallation supprime le service mais laisse les données dans <code>/var/packages/pterodactyl/var</code>. Sauvegardez ou supprimez manuellement les volumes Docker si nécessaire."
+        "desc": "La désinstallation va arrêter et supprimer les conteneurs Docker du Panel."
+      },
+      {
+        "type": "multiselect",
+        "subitems": [
+          {
+            "key": "wizard_delete_data",
+            "desc": "Supprimer toutes les données (base de données, configuration, serveurs de jeux)",
+            "defaultValue": false
+          }
+        ]
+      },
+      {
+        "desc": "<br><b>Attention :</b> Si vous cochez cette case, toutes les données seront définitivement supprimées."
       }
     ]
   }
