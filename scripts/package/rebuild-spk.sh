@@ -64,6 +64,10 @@ declare -a WIZARD_MAPPINGS=(
 LANG_SRC_DIR="lang/fr"
 LANG_DEST_DIR="share/lang/fr"
 
+# Métadonnées du package (description et changelog)
+DESCRIPTION="Pterodactyl Panel pour Synology avec Wings daemon intégré. Configuration Wings: 1) Connectez-vous au Panel 2) Admin → Nodes → Create New 3) Copiez la configuration YAML 4) Dans le Menu DSM, cliquez sur Configurer Wings et collez la configuration."
+CHANGELOG="Ajout traduction française avec choix de langue. Nouvelles icônes officielles Pterodactyl. Interface de configuration Wings intégrée."
+
 # Trouver le SPK le plus récent
 find_latest_spk() {
     local latest=$(ls -t "${DIST_DIR}"/pterodactyl_panel_${ARCH}-${TCVERSION}_*.spk 2>/dev/null | head -1)
@@ -235,6 +239,8 @@ main() {
     log_info "Mise à jour du fichier INFO..."
     sed -i "s/^version=\".*\"/version=\"${new_version}\"/" INFO
     sed -i "s/^checksum=\".*\"/checksum=\"${new_checksum}\"/" INFO
+    sed -i "s/^description=\".*\"/description=\"${DESCRIPTION}\"/" INFO
+    sed -i "s/^changelog=\".*\"/changelog=\"${CHANGELOG}\"/" INFO
 
     if [[ $files_updated -eq 0 ]]; then
         log_warn "Aucun fichier modifié détecté (seule la version sera incrémentée)"
