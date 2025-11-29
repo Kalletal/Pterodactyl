@@ -26,7 +26,7 @@ services:
       APP_SETUP_ADMIN_LASTNAME: ${APP_SETUP_ADMIN_LASTNAME:-User}
       APP_SETUP_ADMIN_PASSWORD: ${APP_SETUP_ADMIN_PASSWORD}
       CACHE_DRIVER: ${CACHE_DRIVER}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION}
+      QUEUE_DRIVER: ${QUEUE_DRIVER}
       SESSION_DRIVER: ${SESSION_DRIVER}
       SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES}
@@ -51,16 +51,17 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME}
     volumes:
       - ${DATA_ROOT}/panel/var:/app/var
-      - ${DATA_ROOT}/panel/storage:/app/storage
-      - ${DATA_ROOT}/panel/logs:/var/log/panel/logs
+      - ${DATA_ROOT}/panel/nginx:/etc/nginx/http.d
       - ${DATA_ROOT}/certs:/etc/letsencrypt
+      - ${DATA_ROOT}/panel/logs:/app/storage/logs
+      - ${DATA_ROOT}/lang/fr:/app/resources/lang/fr:ro
     networks:
       - pterodactyl
 
   panel-db:
     image: ${MARIADB_IMAGE}
     restart: unless-stopped
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}

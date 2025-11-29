@@ -588,3 +588,379 @@ Après analyse complète du fonctionnement de Docker sur Synology :
 - [WunderTech - Complete Container Manager Guide](https://www.wundertech.net/container-manager-on-a-synology-nas/)
 - [Marius Hosting - Synology Docker](https://mariushosting.com/category/synology-container-manager/)
 - [SynoForum - Docker/Container Manager](https://www.synoforum.com/forums/docker-container-manager.45/)
+
+---
+
+## Research Update – 2025-11-29
+
+### DSM Package Center - Comportement de Mise à Jour
+
+**Information importante** : DSM Package Center n'a **pas d'option de mise à jour** pour les paquets SPK tiers. Chaque installation d'un SPK est traitée comme une **nouvelle installation**.
+
+#### Implications pour le Développement
+
+1. **Page de chargement** : Doit être affichée à **chaque démarrage** du paquet, pas seulement lors de la "première installation"
+2. **Scripts preupgrade/postupgrade** : Sont appelés mais le comportement utilisateur est identique à une réinstallation
+3. **Nettoyage des processus** : Les anciens processus (ex: serveur Python HTTP) doivent être explicitement tués lors du `stop` car il n'y a pas de transition propre entre versions
+
+#### Modifications Appliquées
+
+- `dsm-control.sh` : La page de chargement est maintenant lancée à chaque `start`, pas seulement quand `is_first_install()` est vrai
+- `dsm-control.sh` : La commande `stop` tue explicitement les processus Python/HTTP sur le port 38080
+- `loading-server.sh` : Le serveur Python utilise un handler personnalisé qui sert `index.html` pour toutes les URLs (évite les erreurs 404 sur les chemins non-root)
+
+---
+
+## Research Update – 2025-11-29 (Suite)
+
+### Optimisations de Performance Installation/Désinstallation
+
+Les temps d'installation et désinstallation étaient trop longs. Analyse et corrections effectuées.
+
+#### Problèmes Identifiés
+
+| Opération | Problème | Impact |
+|-----------|----------|--------|
+| `service_preupgrade` | `rsync -a "${DATA_DIR}/"` copiait tout le répertoire data (Go de données Docker) | Installation très lente |
+| `service_postupgrade` | `rsync -a` pour restaurer les données | Installation très lente |
+| `service_postinst` | `chown -R` sur tout le répertoire var | Lent sur gros répertoires |
+| `service_preuninst` | `docker stop` sans timeout (10s par défaut par container) | Désinstallation lente |
+| `service_postuninst` | `docker run alpine` pour supprimer les fichiers | Télécharge l'image + lance un container |
+
+#### Solutions Appliquées
+
+1. **Suppression du rsync des données Docker** : Les données Docker (database, redis, panel) sont persistantes et ne bougent pas pendant une mise à jour. Seuls les fichiers de configuration (`panel.env`, `wings.config.yml`) doivent être sauvegardés.
+
+2. **chown ciblé** : Au lieu de `chown -R` récursif sur tout le répertoire, chown uniquement sur les fichiers de configuration spécifiques.
+
+3. **docker stop avec timeout** : Utilisation de `docker stop -t 1` pour réduire le timeout de 10s à 1s par container.
+
+4. **Suppression via busybox** : Utilisation de `busybox` (image légère, souvent en cache) au lieu de `alpine` pour supprimer les fichiers appartenant aux containers Docker.
+
+#### Code Optimisé
+
+```sh
+# service_preupgrade - sauvegarder uniquement les configs
+service_preupgrade()
+{
+    if [ -d "${SYNOPKG_TEMP_UPGRADE_FOLDER}" ]; then
+        cp -a "${ENV_FILE}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/panel.env" 2>/dev/null || true
+        cp -a "${WINGS_CONFIG}" "${SYNOPKG_TEMP_UPGRADE_FOLDER}/wings.config.yml" 2>/dev/null || true
+    fi
+}
+
+# service_postinst - chown ciblé
+if [ -n "${EFF_USER}" ]; then
+    chown "${EFF_USER}:${EFF_USER}" "${VAR_DIR}" "${LOG_DIR}" "${VAR_DIR}/runtime" 2>/dev/null || true
+    chown "${EFF_USER}:${EFF_USER}" "${ENV_FILE}" "${VAR_DIR}/ptero.log" 2>/dev/null || true
+fi
+
+# service_preuninst - timeout court
+docker stop -t 1 pterodactyl_panel-panel-1 pterodactyl_panel-panel-db-1 pterodactyl_panel-panel-redis-1 2>/dev/null || true
+```
+
+---
+
+### Conformité avec la Documentation Officielle pterodactyl.io
+
+Vérification de la configuration par rapport au docker-compose officiel de Pterodactyl.
+
+#### Source Officielle
+
+URL : `https://raw.githubusercontent.com/pterodactyl/panel/1.0-develop/docker-compose.example.yml`
+
+#### Différences Corrigées
+
+| Élément | Avant (incorrect) | Après (conforme) |
+|---------|-------------------|------------------|
+| Volume logs | `/var/log/panel/logs` | `/app/storage/logs` |
+| Volume nginx | Absent | `/etc/nginx/http.d` |
+| Variable queue | `QUEUE_CONNECTION` | `QUEUE_DRIVER` |
+| MariaDB command | `--character-set-server=utf8mb4` | `--default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4` |
+| Répertoires créés | Structure Laravel storage complexe | Seulement `var`, `nginx`, `logs`, `certs` |
+
+#### Configuration docker-compose.yml Finale
+
+```yaml
+services:
+  panel:
+    image: ghcr.io/pterodactyl/panel:latest
+    volumes:
+      - ${DATA_ROOT}/panel/var:/app/var
+      - ${DATA_ROOT}/panel/nginx:/etc/nginx/http.d
+      - ${DATA_ROOT}/certs:/etc/letsencrypt
+      - ${DATA_ROOT}/panel/logs:/app/storage/logs
+    environment:
+      QUEUE_DRIVER: redis  # Pas QUEUE_CONNECTION
+
+  panel-db:
+    image: mariadb:10.5
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+```
+
+#### Image Docker Officielle
+
+L'image `ghcr.io/pterodactyl/panel` utilise **Nginx** (pas Apache). La variable `APP_SERVICE=nginx` dans `panel.env.example` est correcte.
+
+---
+
+### Problème CSRF Token Mismatch
+
+#### Symptôme
+
+Erreur "CSRF token mismatch" lors de la tentative de connexion au panel.
+
+#### Cause
+
+`SESSION_SECURE_COOKIE=true` dans `panel.env.example` mais accès en HTTP (port 38080). Les cookies sécurisés ne sont envoyés que sur connexions HTTPS.
+
+#### Solution
+
+```env
+SESSION_SECURE_COOKIE=false
+```
+
+**Note** : Si l'utilisateur configure un reverse proxy HTTPS devant le panel, il peut remettre `SESSION_SECURE_COOKIE=true`.
+
+---
+
+### Problème de Suppression des Données à la Désinstallation
+
+#### Symptôme
+
+Même avec la case "Supprimer les données" cochée, la base de données n'est pas supprimée. Lors de la réinstallation, les migrations échouent avec :
+
+```
+SQLSTATE[42000]: Can't DROP FOREIGN KEY `node_configuration_tokens_node_foreign`
+```
+
+#### Cause
+
+Les fichiers de la base de données MariaDB appartiennent à l'utilisateur `mysql` du container (uid 999). Le script de désinstallation s'exécute avec les permissions du paquet et ne peut pas supprimer ces fichiers.
+
+#### Solution
+
+Utiliser Docker pour supprimer les fichiers avec les bonnes permissions :
+
+```sh
+service_postuninst()
+{
+    cleanup_package
+
+    if [ "${wizard_delete_data}" = "true" ]; then
+        # Fichiers DB appartiennent à uid 999 (mysql dans container)
+        docker run --rm -v "/var/packages/pterodactyl_panel/var/data/database:/data" busybox rm -rf /data/* 2>/dev/null || true
+        docker run --rm -v "/var/packages/pterodactyl_panel/var/data/redis:/data" busybox rm -rf /data/* 2>/dev/null || true
+        # Supprimer le reste avec permissions normales
+        rm -rf "/var/packages/pterodactyl_panel/var" 2>/dev/null || true
+        rm -rf "/volume1/@appdata/pterodactyl_panel" 2>/dev/null || true
+    fi
+}
+```
+
+**Choix de busybox** : Image très légère (~1.5MB), souvent déjà en cache Docker, plus rapide que alpine.
+
+---
+
+### Serveur de Page de Chargement
+
+#### Problème Initial
+
+Le serveur Python `http.server` basique retourne 404 pour les URLs autres que `/` ou `/index.html`.
+
+#### Solution
+
+Handler Python personnalisé qui redirige toutes les requêtes vers `index.html` :
+
+```sh
+# One-liner Python (évite les problèmes d'indentation dans shell script)
+python3 -c "import http.server,socketserver;H=type('H',(http.server.SimpleHTTPRequestHandler,),{'do_GET':lambda s:(setattr(s,'path','/index.html'),super(type(s),s).do_GET())[-1],'do_HEAD':lambda s:(setattr(s,'path','/index.html'),super(type(s),s).do_HEAD())[-1]});socketserver.TCPServer(('0.0.0.0',${port}),H).serve_forever()"
+```
+
+**Note** : Le code multi-ligne Python dans un script shell peut avoir des problèmes d'indentation. Le one-liner évite ce problème.
+
+---
+
+### Résumé des Versions SPK
+
+| Version | Modifications |
+|---------|---------------|
+| 38 | Page de chargement à chaque démarrage |
+| 39 | Optimisations performance (rsync, chown, timeout) |
+| 40 | Conformité pterodactyl.io (volumes, QUEUE_DRIVER) |
+| 41 | Fix serveur Python (one-liner) |
+| 42 | Fix SESSION_SECURE_COOKIE=false |
+| 43 | Fix suppression données (busybox pour uid 999) |
+
+---
+
+## Research Update – 2025-11-29 (Interface UI DSM)
+
+### Intégration d'Interfaces Utilisateur dans DSM
+
+Pour créer une interface de configuration intégrée dans DSM (pas un nouvel onglet navigateur), plusieurs options sont disponibles.
+
+### Types de Configuration dans app/config
+
+Le fichier `app/config` supporte deux types principaux :
+
+| Type | Comportement | Usage |
+|------|--------------|-------|
+| `"type": "url"` avec protocol/port | **Nouvel onglet navigateur** | Applications web externes |
+| `"type": "url"` avec URL relative | **Popup DSM (iframe)** | Applications intégrées au package |
+| `"type": "legacy"` | **Popup DSM (iframe)** | Applications legacy avec CGI/PHP |
+
+### Structure pour une Webapp Intégrée
+
+Pour qu'une page s'ouvre en popup DSM plutôt qu'en nouvel onglet :
+
+1. **Créer le fichier HTML/PHP** dans le dossier `ui/` du package
+2. **Configurer dsmuidir dans INFO** : `dsmuidir="ui"`
+3. **Utiliser une URL relative** dans `app/config`
+
+#### Exemple de Configuration
+
+```json
+{
+  ".url": {
+    "com.company.MainApp": {
+      "type": "url",
+      "title": "Application Principale",
+      "icon": "images/icon_{0}.png",
+      "protocol": "http",
+      "port": "8080",
+      "url": "/"
+    },
+    "com.company.ConfigApp": {
+      "type": "url",
+      "title": "Configuration",
+      "icon": "images/config_{0}.png",
+      "url": "/webman/3rdparty/package_name/config.html"
+    }
+  }
+}
+```
+
+**Note importante** : Si l'URL ne contient pas de `protocol` et `port`, elle est traitée comme relative et s'ouvre dans une popup DSM.
+
+### Chemin des Fichiers DSM UI
+
+Après installation du package, DSM crée un lien symbolique :
+```
+/var/packages/[package_name]/target/[dsmuidir]/ → /usr/syno/synoman/webman/3rdparty/[package_name]/
+```
+
+Les fichiers placés dans le dossier `ui/` sont donc accessibles via :
+- URL interne : `/webman/3rdparty/[package_name]/fichier.html`
+
+### Communication avec le Backend
+
+Pour une interface de configuration qui doit modifier des fichiers sur le système, plusieurs approches :
+
+#### Option 1 : CGI Script (Recommandée pour DSM)
+
+Le serveur web DSM exécute les scripts CGI. Un script bash ou Python peut être appelé :
+
+```
+/webman/3rdparty/package_name/config.cgi
+```
+
+**Avantages** :
+- Pas besoin de serveur HTTP additionnel
+- Intégré nativement à DSM
+- S'exécute avec les permissions du package
+
+**Inconvénients** :
+- Format de sortie CGI spécifique requis
+- Debugging plus complexe
+
+#### Option 2 : Serveur API Dédié
+
+Un serveur Python/Node sur un port séparé expose une API REST :
+
+```json
+{
+  "url": "/webman/3rdparty/package_name/config.html"
+}
+```
+
+La page HTML communique avec l'API via JavaScript fetch().
+
+**Avantages** :
+- Plus flexible
+- Facile à tester
+- Interface moderne (JSON API)
+
+**Inconvénients** :
+- Port supplémentaire à ouvrir
+- Processus additionnel à gérer
+
+### Multiples Boutons dans Package Center
+
+Un package peut avoir plusieurs entrées dans le menu DSM. Chaque entrée est définie par un identifiant unique dans `.url` :
+
+```json
+{
+  ".url": {
+    "com.package.main": {
+      "title": "Ouvrir l'Application",
+      "type": "url",
+      "protocol": "http",
+      "port": "8080",
+      "url": "/"
+    },
+    "com.package.config": {
+      "title": "Configurer",
+      "type": "url",
+      "url": "/webman/3rdparty/package_name/settings.html"
+    }
+  }
+}
+```
+
+Dans Package Center, l'utilisateur verra **deux boutons** séparés.
+
+### Permissions et Sécurité
+
+La propriété `allUsers` contrôle qui peut voir le bouton :
+
+| Valeur | Visibilité |
+|--------|------------|
+| `true` | Tous les utilisateurs |
+| `false` (défaut) | Administrateurs uniquement |
+
+### Problèmes Courants
+
+#### Page Blanche dans l'iframe
+
+Si la page affiche un écran blanc :
+- Vérifier que HTTPS est utilisé si DSM est en HTTPS
+- Vérifier les headers X-Frame-Options et CSP
+- Vérifier la console navigateur pour les erreurs CORS
+
+#### Conflits de Ports
+
+Si un port est utilisé par le package ET par un serveur de config :
+- Utiliser deux ports différents
+- Ou utiliser CGI sur le même port que DSM (pas de port additionnel)
+
+### Sources
+
+- [Synology Developer Guide - Application Config](https://help.synology.com/developer-guide/integrate_dsm/config.html)
+- [Synology Developer Guide - Desktop Application](https://help.synology.com/developer-guide/integrate_dsm/desktopapp.html)
+- [Synology 3rd-Party Apps Developer Guide (PDF)](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Firmware/DSM/All/enu/Synology_NAS_Server_3rd_Party_Apps_Integration_Guide.pdf)
+- [MODS Package Creator](https://github.com/vletroye/Mods)
+- [BeatificaBytes - Custom URL Shortcuts](https://www.beatificabytes.be/add-custom-url-shortcuts-into-synologys-dsm-start-menu-or-on-dsms-desktop/)
+- [SynoForum - DSM Package Development](https://www.synoforum.com/)
+
+### Application pour Pterodactyl Wings Config
+
+Pour le package Pterodactyl, l'approche recommandée est :
+
+1. **Bouton "Pterodactyl Panel"** : `type: "url"` avec `protocol: "http"`, `port: "38080"` → Ouvre en nouvel onglet
+2. **Bouton "Configurer Wings"** : `type: "url"` avec URL relative `/webman/3rdparty/pterodactyl_panel/wings-config.html` → Ouvre en popup DSM
+
+Cette approche :
+- Ne nécessite pas de serveur HTTP supplémentaire
+- S'intègre nativement dans DSM
+- Sépare clairement les deux fonctionnalités

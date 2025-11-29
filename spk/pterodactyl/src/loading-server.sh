@@ -6,6 +6,7 @@ VAR_DIR="/var/packages/${PACKAGE}/var"
 PID_FILE="${VAR_DIR}/loading-server.pid"
 HTTPD_ROOT="/tmp/pterodactyl_loading"
 LOG_FILE="${VAR_DIR}/${PACKAGE}.log"
+DEFAULT_PORT="38081"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [loading-server] $1" >> "${LOG_FILE}" 2>/dev/null
@@ -13,7 +14,7 @@ log() {
 }
 
 start_server() {
-    port="${1:-38080}"
+    port="${1:-${DEFAULT_PORT}}"
     html_file="${2:-/var/packages/${PACKAGE}/target/share/loading.html}"
 
     log "Starting loading server on port ${port}"
@@ -43,7 +44,8 @@ start_server() {
     if command -v python3 >/dev/null 2>&1; then
         log "Using python3 http.server on 0.0.0.0:${port}"
         cd "${HTTPD_ROOT}"
-        python3 -m http.server "${port}" --bind 0.0.0.0 >> "${LOG_FILE}" 2>&1 &
+        # Custom handler to always serve index.html for any path
+        python3 -c "import http.server,socketserver;H=type('H',(http.server.SimpleHTTPRequestHandler,),{'do_GET':lambda s:(setattr(s,'path','/index.html'),super(type(s),s).do_GET())[-1],'do_HEAD':lambda s:(setattr(s,'path','/index.html'),super(type(s),s).do_HEAD())[-1]});socketserver.TCPServer(('0.0.0.0',${port}),H).serve_forever()" >> "${LOG_FILE}" 2>&1 &
         SERVER_PID=$!
         echo "${SERVER_PID}" > "${PID_FILE}"
         sleep 1

@@ -8,8 +8,8 @@ DEPENDS = cross/pterodactyl-panel cross/wings
 
 MAINTAINER = Synology Ptero Builders
 MAINTAINER_URL = https://github.com/gilles/ProjetSPK
-DESCRIPTION = Synology DS920+ ready Pterodactyl Panel with bundled Wings daemon and containerized stack helpers.
-CHANGELOG = "Correction du serveur de page de chargement, affichage pendant le telechargement des images Docker."
+DESCRIPTION = Pterodactyl Panel pour Synology avec Wings daemon intégré. Configuration Wings: 1) Connectez-vous au Panel 2) Admin → Nodes → Create New 3) Copiez la configuration YAML 4) Dans le Menu DSM cliquez sur Configurer Wings et collez la configuration.
+CHANGELOG = "Ajout traduction française avec choix de langue dans le wizard. Nouvelles icônes officielles Pterodactyl."
 DISPLAY_NAME = Pterodactyl Panel
 HOMEPAGE = https://pterodactyl.io/
 LICENSE = MIT
@@ -52,6 +52,19 @@ ptero_extra_install:
 	install -d -m 0755 $(STAGING_DIR)/app/images
 	install -m 0644 src/app/config $(STAGING_DIR)/app/config
 	install -m 0644 src/app/images/*.png $(STAGING_DIR)/app/images/
+	# Wings configuration CGI (DSM popup interface)
+	install -m 0755 src/ui/wings-config.cgi $(STAGING_DIR)/app/wings-config.cgi
 	# Loading page
 	install -m 0644 src/loading.html $(STAGING_DIR)/share/loading.html
 	install -m 0755 src/loading-server.sh $(STAGING_DIR)/bin/loading-server.sh
+	# French translation files
+	install -d -m 0755 $(STAGING_DIR)/share/lang/fr
+	install -d -m 0755 $(STAGING_DIR)/share/lang/fr/admin
+	install -d -m 0755 $(STAGING_DIR)/share/lang/fr/command
+	install -d -m 0755 $(STAGING_DIR)/share/lang/fr/dashboard
+	install -d -m 0755 $(STAGING_DIR)/share/lang/fr/server
+	cp -r src/lang/fr/*.php $(STAGING_DIR)/share/lang/fr/
+	cp -r src/lang/fr/admin/*.php $(STAGING_DIR)/share/lang/fr/admin/
+	cp -r src/lang/fr/command/*.php $(STAGING_DIR)/share/lang/fr/command/
+	cp -r src/lang/fr/dashboard/*.php $(STAGING_DIR)/share/lang/fr/dashboard/
+	cp -r src/lang/fr/server/*.php $(STAGING_DIR)/share/lang/fr/server/

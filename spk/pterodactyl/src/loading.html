@@ -164,13 +164,18 @@
             <div class="scanner-light"></div>
         </div>
 
-        <div class="countdown" id="countdown">03:00</div>
+        <div class="countdown" id="countdown">02:00</div>
     </div>
 
     <script>
-        const COUNTDOWN_SECONDS = 180;
+        const COUNTDOWN_SECONDS = 120;
+        const PANEL_PORT = 38080;
         let countdown = COUNTDOWN_SECONDS;
         let countdownElement = document.getElementById('countdown');
+        let serverReady = false;
+
+        // Build the Panel URL (same host, but port 38080)
+        const panelUrl = window.location.protocol + '//' + window.location.hostname + ':' + PANEL_PORT + '/';
 
         function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
@@ -178,32 +183,45 @@
             return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
         }
 
+        function redirectToPanel() {
+            window.location.href = panelUrl;
+        }
+
         function updateCountdown() {
+            if (serverReady) {
+                // Serveur prêt, redirection vers le Panel
+                redirectToPanel();
+                return;
+            }
+
             countdown--;
             countdownElement.textContent = formatTime(countdown);
 
             if (countdown <= 0) {
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
+                // Timeout, essayer de rediriger quand même
+                redirectToPanel();
             }
         }
 
         // Initial display
         countdownElement.textContent = formatTime(countdown);
 
+        // Décompte chaque seconde
         setInterval(updateCountdown, 1000);
 
+        // Vérification du Panel (port 38080) toutes les 5 secondes
         setInterval(async () => {
             try {
-                const response = await fetch(window.location.href, {
+                const response = await fetch(panelUrl, {
                     method: 'HEAD',
-                    cache: 'no-cache'
+                    cache: 'no-cache',
+                    mode: 'no-cors'
                 });
-                if (response.ok && countdown > 5) {
-                    countdown = 3;
-                }
-            } catch (e) {}
+                // With no-cors, we can't check response.ok, but if fetch succeeds without error, server is likely up
+                serverReady = true;
+            } catch (e) {
+                // Server not ready yet
+            }
         }, 5000);
     </script>
 </body>

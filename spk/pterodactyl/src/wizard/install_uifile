@@ -3,7 +3,23 @@
     "step_title": "Configuration du Panel",
     "items": [
       {
-        "desc": "<b>Important:</b> Entrez l'adresse IP de votre NAS ou un nom de domaine pointant vers celui-ci.<br><i>Ne laissez pas 'localhost' sauf si vous accédez uniquement depuis ce NAS.</i>"
+        "type": "combobox",
+        "desc": "Langue de l'interface du Panel",
+        "subitems": [
+          {
+            "key": "wizard_app_locale",
+            "desc": "Langue",
+            "defaultValue": "fr",
+            "editable": false,
+            "data": [
+              ["fr", "Français"],
+              ["en", "English"]
+            ]
+          }
+        ]
+      },
+      {
+        "desc": "<br><b>Important:</b> Entrez l'adresse IP de votre NAS ou un nom de domaine pointant vers celui-ci.<br><i>Ne laissez pas 'localhost' sauf si vous accédez uniquement depuis ce NAS.</i>"
       },
       {
         "type": "textfield",
@@ -130,7 +146,10 @@
     "step_title": "Informations importantes",
     "items": [
       {
-        "desc": "<b>Prérequis:</b><ul><li><b>Container Manager</b> (Docker) sera installé automatiquement</li></ul><br><b>Services créés:</b><ul><li>MariaDB 10.5 (base de données)</li><li>Redis Alpine (cache)</li><li>Pterodactyl Panel (interface web)</li></ul><br><b>Connexion:</b> Utilisez l'email et le mot de passe configurés à l'étape précédente.<br><br><b>Note:</b> Wings (daemon) doit être configuré séparément après l'installation du Panel."
+        "desc": "<b>Prérequis:</b><ul><li><b>Container Manager</b> (Docker) sera installé automatiquement</li></ul><br><b>Services créés:</b><ul><li>MariaDB 10.5 (base de données)</li><li>Redis Alpine (cache)</li><li>Pterodactyl Panel (interface web)</li></ul><br><b>Connexion:</b> Utilisez l'email et le mot de passe configurés à l'étape précédente."
+      },
+      {
+        "desc": "<br><hr><br><b>Configuration de Wings (daemon) :</b><br><br>Après l'installation, suivez ces étapes pour configurer Wings :<ol><li>Connectez-vous au <b>Panel Pterodactyl</b></li><li>Allez dans <code>Admin</code> → <code>Nodes</code> → <code>Create New</code></li><li>Configurez le Node avec le FQDN/IP de votre NAS</li><li>Cliquez sur l'onglet <code>Configuration</code> puis <code>Generate Token</code></li><li>Dans le <b>Menu DSM</b>, cliquez sur <code>Configurer Wings</code></li><li>Collez la configuration YAML générée et enregistrez</li></ol><br><i>Wings permet de gérer les serveurs de jeux sur ce NAS.</i>"
       }
     ]
   }

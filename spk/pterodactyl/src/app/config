@@ -2,12 +2,19 @@
   ".url": {
     "com.synocommunity.packages.pterodactyl_panel": {
       "title": "Pterodactyl Panel",
-      "desc": "Connectez-vous avec l'email et le mot de passe configurés lors de l'installation. Vous pouvez modifier votre mot de passe dans les paramètres du Panel.",
+      "desc": "Ouvrir l'interface web du Panel Pterodactyl",
       "icon": "images/pterodactyl_panel-{0}.png",
       "type": "url",
       "protocol": "http",
       "port": "38080",
       "url": "/"
+    },
+    "com.synocommunity.packages.pterodactyl_wings_config": {
+      "title": "Configurer Wings",
+      "desc": "Configurer le daemon Wings pour ce NAS",
+      "icon": "images/pterodactyl_panel-{0}.png",
+      "type": "legacy",
+      "url": "wings-config.cgi"
     }
   }
 }

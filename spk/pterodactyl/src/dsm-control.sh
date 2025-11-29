@@ -22,6 +22,7 @@ WINGS_LOG="${VAR_DIR}/wings.log"
 LOADING_SERVER="${INSTALL_DIR}/bin/loading-server.sh"
 LOADING_HTML="${INSTALL_DIR}/share/loading.html"
 PANEL_PORT="38080"
+LOADING_PORT="38081"
 
 PATH="${INSTALL_DIR}/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -32,8 +33,8 @@ log() {
 start_loading_page()
 {
     if [ -x "${LOADING_SERVER}" ] && [ -f "${LOADING_HTML}" ]; then
-        log "Starting loading page server..."
-        "${LOADING_SERVER}" start "${PANEL_PORT}" "${LOADING_HTML}" >> "${LOG_FILE}" 2>&1
+        log "Starting loading page server on port ${LOADING_PORT}..."
+        "${LOADING_SERVER}" start "${LOADING_PORT}" "${LOADING_HTML}" >> "${LOG_FILE}" 2>&1
     fi
 }
 
@@ -47,12 +48,16 @@ stop_loading_page()
 ensure_port_free()
 {
     # Make sure port 38080 is free before starting containers
+    # Note: Loading page runs on LOADING_PORT (38081), not PANEL_PORT (38080)
     log "Ensuring port ${PANEL_PORT} is free..."
 
-    # Stop loading page if running
-    stop_loading_page
+    # Method 1: fuser (most reliable on Synology)
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k ${PANEL_PORT}/tcp 2>/dev/null
+        sleep 1
+    fi
 
-    # Kill any process on the port
+    # Method 2: lsof
     PID_ON_PORT=$(lsof -t -i:${PANEL_PORT} 2>/dev/null)
     if [ -n "${PID_ON_PORT}" ]; then
         log "Killing process ${PID_ON_PORT} on port ${PANEL_PORT}"
@@ -60,9 +65,17 @@ ensure_port_free()
         sleep 1
     fi
 
+    # Method 3: netstat + kill
+    PID_ON_PORT=$(netstat -tlnp 2>/dev/null | grep ":${PANEL_PORT} " | awk '{print $7}' | cut -d'/' -f1)
+    if [ -n "${PID_ON_PORT}" ] && [ "${PID_ON_PORT}" != "-" ]; then
+        log "Killing process ${PID_ON_PORT} on port ${PANEL_PORT} (netstat)"
+        kill -9 ${PID_ON_PORT} 2>/dev/null
+        sleep 1
+    fi
+
     # Verify port is free
     if netstat -tlnp 2>/dev/null | grep -q ":${PANEL_PORT} "; then
-        log "WARNING: Port ${PANEL_PORT} still in use"
+        log "WARNING: Port ${PANEL_PORT} still in use after cleanup attempts"
         return 1
     fi
 
@@ -83,11 +96,15 @@ wait_for_panel()
     for i in $(seq 1 30); do
         if curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PANEL_PORT}" 2>/dev/null | grep -qE "^(200|302|301)"; then
             log "Panel is ready!"
+            # Stop the loading page now that Panel is available
+            stop_loading_page
             return 0
         fi
         sleep 3
     done
     log "Panel startup timeout (may still be initializing)"
+    # Stop loading page anyway after timeout
+    stop_loading_page
     return 1
 }
 
@@ -108,12 +125,9 @@ start_containers()
         return 0
     fi
 
-    FIRST_INSTALL="no"
-    if is_first_install; then
-        FIRST_INSTALL="yes"
-        log "First installation detected - showing loading page"
-        start_loading_page
-    fi
+    # Always show loading page while containers start
+    log "Starting loading page while containers initialize..."
+    start_loading_page
 
     # Pull images (can take a while on first install)
     log "Pulling Docker images..."
@@ -217,6 +231,10 @@ case "$1" in
         log "Stopping ${DNAME}"
         stop_wings
         stop_containers
+        stop_loading_page
+        # Kill any remaining Python HTTP servers on loading port
+        pkill -9 -f "python.*${LOADING_PORT}" 2>/dev/null || true
+        pkill -9 -f "http.server.*${LOADING_PORT}" 2>/dev/null || true
         exit 0
         ;;
     status)
